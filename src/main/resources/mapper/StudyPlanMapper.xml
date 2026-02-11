@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.school.mapper.StudyPlanMapper">
+    <!-- 批量插入学习计划 -->
+    <insert id="insertBatch" parameterType="java.util.List">
+        INSERT INTO study_plans (
+            id, user_id, title, description, plan_type, subject, 
+            difficulty, status, progress_percent, start_date, end_date
+        ) VALUES
+        <foreach collection="list" item="plan" separator=",">
+            (
+                #{plan.id}, #{plan.userId}, #{plan.title}, #{plan.description}, 
+                #{plan.planType}, #{plan.subject}, #{plan.difficulty}, #{plan.status}, 
+                #{plan.progressPercent}, #{plan.startDate}, #{plan.endDate}
+            )
+        </foreach>
+    </insert>
+
+    <!-- 清空所有学习计划数据 -->
+    <delete id="deleteAll">
+        DELETE FROM study_plans
+    </delete>
+
+    <!-- 根据用户ID和时间范围获取学习计划列表 -->
+    <select id="getStudyPlansByUserIdAndTimeRange" resultType="com.school.entity.StudyPlan">
+        SELECT * FROM study_plans
+        WHERE user_id = #{userId}
+        AND end_date BETWEEN #{startTime}::date AND #{endTime}::date
+    </select>
+
+    <!-- 获取用户学习计划总数 -->
+    <select id="getTotalPlanCount" resultType="int">
+        SELECT COUNT(*) FROM study_plans
+        WHERE user_id = #{userId}
+        AND end_date BETWEEN #{startTime}::date AND #{endTime}::date
+    </select>
+
+    <!-- 获取用户已完成学习计划数 -->
+    <select id="getCompletedPlanCount" resultType="int">
+        SELECT COUNT(*) FROM study_plans
+        WHERE user_id = #{userId}
+        AND status = '已完成'
+        AND end_date BETWEEN #{startTime}::date AND #{endTime}::date
+    </select>
+
+    <!-- 获取用户学习计划平均进度 -->
+    <select id="getAverageProgress" resultType="double">
+        SELECT AVG(progress_percent) FROM study_plans
+        WHERE user_id = #{userId}
+        AND end_date BETWEEN #{startTime}::date AND #{endTime}::date
+    </select>
+
+    <!-- 获取用户延期学习计划数 -->
+    <select id="getOverduePlanCount" resultType="int">
+        SELECT COUNT(*) FROM study_plans
+        WHERE user_id = #{userId}
+        AND status != '已完成'
+        AND end_date &lt; #{currentDate}::date
+        AND end_date BETWEEN #{startTime}::date AND #{endTime}::date
+    </select>
+
+    <!-- 获取用户学习计划难度分布 -->
+    <select id="getDifficultyDistribution" resultType="java.util.Map">
+        SELECT 
+            difficulty, 
+            COUNT(*) as count
+        FROM study_plans
+        WHERE user_id = #{userId}
+        AND end_date BETWEEN #{startTime}::date AND #{endTime}::date
+        GROUP BY difficulty
+    </select>
+
+    <!-- 获取用户学习计划类型分布 -->
+    <select id="getPlanTypeDistribution" resultType="java.util.Map">
+        SELECT 
+            plan_type, 
+            COUNT(*) as count
+        FROM study_plans
+        WHERE user_id = #{userId}
+        AND end_date BETWEEN #{startTime}::date AND #{endTime}::date
+        GROUP BY plan_type
+    </select>
+
+    <!-- 获取用户各科目学习计划数量 -->
+    <select id="getSubjectDistribution" resultType="java.util.Map">
+        SELECT 
+            subject, 
+            COUNT(*) as count
+        FROM study_plans
+        WHERE user_id = #{userId}
+        AND end_date BETWEEN #{startTime}::date AND #{endTime}::date
+        GROUP BY subject
+    </select>
+</mapper>

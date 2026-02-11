@@ -1,0 +1,35 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/postgres
+    username: postgres
+    password: 123456
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        show_sql: true
+        format_sql: true
+        use_sql_comments: true
+
+mybatis:
+  configuration:
+    map-underscore-to-camel-case: true
+  mapper-locations: classpath:mapper/*.xml
+
+# 千问API配置
+qianwen:
+  api:
+    # 请在这里配置您的千问API密钥
+    api-key: sk-a293e2da455c4e62bb8f7439125b241b
+    # API端点（阿里云千问API）
+    endpoint: https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation
+    # 模型名称
+    model: qwen-max
+    # 超时时间（秒）
+    timeout: 600
+
+server:
+  port: 8082
