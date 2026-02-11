@@ -1,3 +1,40 @@
-# 默认忽略的文件
+# IntelliJ IDEA 配置文件
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# IntelliJ IDEA 工作区文件
 /shelf/
 /workspace.xml
+
+# Maven 编译输出和目标目录
+target/
+
+# Maven 发布文件
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+dependency-reduced-pom.xml
+buildNumber.properties
+
+# Maven Wrapper 文件
+.mvn/timing.properties
+.mvn/wrapper/maven-wrapper.jar
+
+# Eclipse 配置文件
+.project
+.classpath
+
+# Java 编译文件
+*.class
+
+# 日志文件
+*.log
+logs/
+
+# 系统文件
+.DS_Store
+Thumbs.db
