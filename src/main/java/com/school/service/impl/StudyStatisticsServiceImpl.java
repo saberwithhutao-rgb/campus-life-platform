@@ -117,7 +117,7 @@ public class StudyStatisticsServiceImpl implements StudyStatisticsService {
         result.put("overduePlanCount", overduePlanCount);
         result.put("subjectDistribution", subjectDistribution);
 
-        System.out.println("成功获取学习统计数据，返回 " + result.keySet().size() + " 个字段");
+        System.out.println("成功获取学习统计数据，返回 " + result.size() + " 个字段");
         return result;
     }
 
@@ -130,25 +130,20 @@ public class StudyStatisticsServiceImpl implements StudyStatisticsService {
     private Map<String, String> calculateTimeRange(String timeRange) {
         Map<String, String> result = new HashMap<>();
         LocalDateTime now = LocalDateTime.now();
-        LocalDateTime startTime;
-
-        switch (timeRange) {
-            case "today":
+        LocalDateTime startTime = switch (timeRange) {
+            case "today" ->
                 // 今天：从今天00:00:00到现在
-                startTime = now.withHour(0).withMinute(0).withSecond(0);
-                break;
-            case "week":
+                    now.withHour(0).withMinute(0).withSecond(0);
+            case "week" ->
                 // 过去一周：从7天前到现在
-                startTime = now.minusDays(7);
-                break;
-            case "month":
+                    now.minusDays(7);
+            case "month" ->
                 // 过去一个月：从30天前到现在
-                startTime = now.minusDays(30);
-                break;
-            default:
+                    now.minusDays(30);
+            default ->
                 // 默认：今天
-                startTime = now.withHour(0).withMinute(0).withSecond(0);
-        }
+                    now.withHour(0).withMinute(0).withSecond(0);
+        };
 
         result.put("startTime", startTime.format(FORMATTER));
         result.put("endTime", now.format(FORMATTER));
@@ -163,34 +158,47 @@ public class StudyStatisticsServiceImpl implements StudyStatisticsService {
      * @return 格式化后的分布数据Map
      */
     private Map<String, Object> formatDistribution(List<Map<String, Object>> distributionList, int totalCount) {
+        System.out.println("=== formatDistribution 详细日志开始 ===");
+        System.out.println("distributionList 原始数据: " + distributionList);
+        System.out.println("distributionList 大小: " + distributionList.size());
+        System.out.println("totalCount: " + totalCount);
+
         Map<String, Object> result = new HashMap<>();
         List<Map<String, Object>> details = new ArrayList<>();
 
         for (Map<String, Object> item : distributionList) {
+            System.out.println("处理单个item: " + item);
+            System.out.println("item的keys: " + item.keySet());
+
             String key = (String) item.get("difficulty") != null ? (String) item.get("difficulty")
                     : (String) item.get("plan_type");
-            // 处理PostgreSQL返回的Long类型
-            Number countNum = (Number) item.get("count");
-            Integer count = countNum.intValue();
+            System.out.println("提取的key: " + key);
 
-            // 计算占比
+            Number countNum = (Number) item.get("count");
+            System.out.println("countNum: " + countNum);
+            Integer count = countNum.intValue();
+            System.out.println("转换后的count: " + count);
+
             double percentage = 0.0;
             if (totalCount > 0) {
                 percentage = (double) count / totalCount;
             }
+            System.out.println("计算的percentage: " + percentage);
 
-            // 构建详细信息
             Map<String, Object> detail = new HashMap<>();
             detail.put("type", key);
             detail.put("count", count);
             detail.put("percentage", Double.parseDouble(DECIMAL_FORMAT.format(percentage)));
             details.add(detail);
+            System.out.println("添加的detail: " + detail);
 
-            // 同时添加到结果Map中，方便前端直接使用
             result.put(key, count);
         }
 
         result.put("details", details);
+        System.out.println("最终的details: " + details);
+        System.out.println("最终的result: " + result);
+        System.out.println("=== formatDistribution 详细日志结束 ===");
         return result;
     }
 }
