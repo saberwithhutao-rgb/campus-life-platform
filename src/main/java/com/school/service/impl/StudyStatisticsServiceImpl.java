@@ -1,5 +1,6 @@
 package com.school.service.impl;
 
+import com.school.entity.StudyPlan;
 import com.school.mapper.StudyPlanMapper;
 import com.school.service.StudyStatisticsService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -36,14 +37,32 @@ public class StudyStatisticsServiceImpl implements StudyStatisticsService {
      */
     @Override
     public Map<String, Object> getStudyStatistics(Integer userId, String timeRange) {
-        System.out.println("开始获取学习统计数据，用户ID: " + userId + ", 时间范围: " + timeRange);
-        
+        // ===== 添加这段调试代码开始 =====
+        System.out.println("===== 开始调试 =====");
+        System.out.println("userId: " + userId);
+        System.out.println("timeRange: " + timeRange);
+
+        // 新增：查询所有数据（不加时间过滤）
+        List<StudyPlan> allPlans = studyPlanMapper.getStudyPlansByUserIdAndTimeRange(userId, "1900-01-01", "2100-12-31");
+        System.out.println("用户 " + userId + " 总共有 " + allPlans.size() + " 条计划");
+        for (StudyPlan plan : allPlans) {
+            System.out.println("计划: id=" + plan.getId() +
+                    ", start_date=" + plan.getStartDate() +
+                    ", end_date=" + plan.getEndDate() +
+                    ", difficulty=" + plan.getDifficulty());
+        }
+
         // 计算时间范围
         Map<String, String> timeRangeMap = calculateTimeRange(timeRange);
         String startTime = timeRangeMap.get("startTime");
         String endTime = timeRangeMap.get("endTime");
         String currentDate = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd"));
         System.out.println("计算的时间范围: " + startTime + " 到 " + endTime);
+
+        // 新增：用当前时间范围查询
+        List<StudyPlan> plansInRange = studyPlanMapper.getStudyPlansByUserIdAndTimeRange(userId, startTime, endTime);
+        System.out.println("时间范围内查到 " + plansInRange.size() + " 条计划");
+        System.out.println("开始获取学习统计数据，用户ID: " + userId + ", 时间范围: " + timeRange);
 
         // 1. 获取总计划数
         System.out.println("开始查询总计划数");
@@ -94,7 +113,6 @@ public class StudyStatisticsServiceImpl implements StudyStatisticsService {
         Map<String, Object> subjectDistribution = new HashMap<>();
         for (Map<String, Object> item : subjectDistributionList) {
             String subject = (String) item.get("subject");
-            // 处理PostgreSQL返回的Long类型
             Number countNum = (Number) item.get("count");
             Integer count = countNum.intValue();
             subjectDistribution.put(subject, count);
