@@ -2,7 +2,7 @@ spring:
   datasource:
     url: jdbc:postgresql://localhost:5432/smart_campus
     username: smartcampus_app
-    password: SmartCampus2024
+    password:  ${DB_PASSWORD}
     driver-class-name: org.postgresql.Driver
   jpa:
     hibernate:
@@ -23,7 +23,7 @@ mybatis:
 qianwen:
   api:
     # 请在这里配置您的千问API密钥
-    api-key: sk-a293e2da455c4e62bb8f7439125b241b
+    api-key: ${CAMPUS_LIFE_API_KEY}
     # API端点（阿里云千问API）
     endpoint: https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation
     # 模型名称
