@@ -4,60 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="bca160cd-6d66-4557-990b-dde2e708ff28" name="更改" comment="学习管理">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/QIANWEN_API_GUIDE.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/RUN_PROJECT.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/compiler.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/copilot.data.migration.ask2agent.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/dbnavigator.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/encodings.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/jarRepositories.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/misc.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/pom.xml" beforeDir="false" afterPath="$PROJECT_DIR$/pom.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/school/CampusLifePlatformApplication.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/school/config/CorsConfig.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/school/config/GlobalExceptionHandler.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/school/config/QianwenConfig.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/school/config/RestTemplateConfig.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/school/controller/LibrarySeatController.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/school/controller/LibraryStudyRecordController.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/school/controller/StudyStatisticsController.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/school/controller/StudySuggestionController.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/school/entity/LibrarySeatGlobal.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/school/entity/LibrarySeatOperation.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/school/entity/LibraryStudyRecord.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/school/entity/Result.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/school/entity/ResultVO.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/school/entity/StudyPlan.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/school/mapper/LibraryStudyRecordMapper.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/school/mapper/StudyPlanMapper.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/school/repository/LibrarySeatGlobalRepository.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/school/repository/LibrarySeatOperationRepository.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/school/service/LibrarySeatService.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/school/service/LibraryStudyRecordService.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/school/service/QianwenService.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/school/service/StudyPlanService.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/school/service/StudyStatisticsService.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/school/service/StudySuggestionService.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/school/service/impl/LibrarySeatServiceImpl.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/school/service/impl/LibraryStudyRecordServiceImpl.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/school/service/impl/QianwenServiceImpl.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/school/service/impl/StudyPlanServiceImpl.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/school/service/impl/StudyStatisticsServiceImpl.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/school/service/impl/StudySuggestionServiceImpl.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/school/test/StudyPlanTest.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/java/com/school/test/UpdateUserIdTest.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/resources/api-documentation.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/resources/application.yml" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/resources/application.yml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/resources/library-api-documentation.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/resources/library-seat-api-documentation.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/resources/library-seat-frontend-guide.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main/resources/mapper/StudyPlanMapper.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/test/java/TestConnection.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/test/java/TestConnection.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/test/java/com/school/CampusLifePlatformApplicationTests.java" beforeDir="false" />
-    </list>
+    <list default="true" id="bca160cd-6d66-4557-990b-dde2e708ff28" name="更改" comment="学习管理" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -185,7 +132,15 @@
       <option name="project" value="LOCAL" />
       <updated>1773217502314</updated>
     </task>
-    <option name="localTasksCounter" value="7" />
+    <task id="LOCAL-00007" summary="学习管理">
+      <option name="closed" value="true" />
+      <created>1773580810252</created>
+      <option name="number" value="00007" />
+      <option name="presentableId" value="LOCAL-00007" />
+      <option name="project" value="LOCAL" />
+      <updated>1773580810252</updated>
+    </task>
+    <option name="localTasksCounter" value="8" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
