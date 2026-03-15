@@ -1,47 +1,44 @@
 package com.campus.forum.util;
 
-import io.jsonwebtoken.Claims;
-import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.SignatureAlgorithm;
+import io.jsonwebtoken.*;
+import io.jsonwebtoken.security.Keys;
+import jakarta.annotation.PostConstruct;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
-
+import java.nio.charset.StandardCharsets;
 import java.util.Date;
 
 @Component
 public class JwtUtil {
+
     @Value("${jwt.secret}")
-    private String secretKey;
+    private String secret;
+
+    private javax.crypto.SecretKey key;
+
+    @PostConstruct
+    public void init() {
+        this.key = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
+    }
 
     public String generateToken(Integer userId) {
-        Date now = new Date();
-        long expiration = 86400000;
-        Date expireDate = new Date(now.getTime() + expiration);
-
         return Jwts.builder()
                 .setSubject(userId.toString())
-                .setIssuedAt(now)
-                .setExpiration(expireDate)
-                .signWith(SignatureAlgorithm.HS256, secretKey)
+                .setIssuedAt(new Date())
+                .setExpiration(new Date(System.currentTimeMillis() + 86400000))
+                .signWith(key, Jwts.SIG.HS256)
                 .compact();
     }
 
     public Long getUserIdFromToken(String token) {
         try {
-            System.out.println("JwtUtil - 使用的密钥: " + secretKey);
-            System.out.println("JwtUtil - 收到的token: " + token);
-
             Claims claims = Jwts.parser()
-                    .setSigningKey(secretKey)
-                    .parseClaimsJws(token)
-                    .getBody();
-
-            System.out.println("JwtUtil - 解析出的claims: " + claims);
-            System.out.println("JwtUtil - subject: " + claims.getSubject());
-
+                    .verifyWith(key)
+                    .build()
+                    .parseSignedClaims(token)
+                    .getPayload();
             return Long.parseLong(claims.getSubject());
         } catch (Exception e) {
-            System.out.println("JwtUtil - 解析失败: " + e.getMessage());
             e.printStackTrace();
             return null;
         }
@@ -49,7 +46,7 @@ public class JwtUtil {
 
     public boolean validateToken(String token) {
         try {
-            Jwts.parser().setSigningKey(secretKey).parseClaimsJws(token);
+            Jwts.parser().verifyWith(key).build().parseSignedClaims(token);
             return true;
         } catch (Exception e) {
             return false;
