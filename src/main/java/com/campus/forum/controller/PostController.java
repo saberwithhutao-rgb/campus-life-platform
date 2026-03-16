@@ -14,7 +14,7 @@ import java.util.HashMap;
 import java.util.List;
 
 @RestController
-@RequestMapping({ "/posts", "/api/posts" })
+@RequestMapping("/api/forum/posts")
 public class PostController {
 
   private final PostService postService;
