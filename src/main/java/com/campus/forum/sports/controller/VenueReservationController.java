@@ -24,6 +24,21 @@ public class VenueReservationController {
   public Result<?> createReservation(@RequestBody VenueReservationDTO reservationDTO, @CurrentUser Integer userId) {
     try {
       reservationDTO.setUserId(userId);
+
+        String startTime = reservationDTO.getStartTime();
+        Integer duration = reservationDTO.getDuration();
+
+        String[] timeParts = startTime.split(":");
+        int hours = Integer.parseInt(timeParts[0]);
+        int minutes = Integer.parseInt(timeParts[1]);
+
+        int totalMinutes = hours * 60 + minutes + duration;
+        int endHours = totalMinutes / 60;
+
+        if (endHours >= 24) {
+            return Result.fail(400, "预约时间已超过当天24点，请重新选择开始时间或减少时长");
+        }
+
       return Result.success(reservationService.createReservation(reservationDTO));
     } catch (Exception e) {
       e.printStackTrace();
