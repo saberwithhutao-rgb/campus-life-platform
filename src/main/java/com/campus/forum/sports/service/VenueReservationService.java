@@ -9,7 +9,7 @@ public interface VenueReservationService {
   VenueReservation occupyCourt(Integer reservationId, Integer userId);
   void leaveCourt(Integer reservationId, Integer userId);
   List<VenueReservation> getReservationsByUserId(Integer userId);
-  List<VenueReservation> getReservationsByCourtId(Integer courtId);
+  List<VenueReservation> getReservationsByCourtId(Integer courtId, Integer currentUserId);
   VenueReservation getReservationById(Integer id);
   void processExpiredReservations();
 }

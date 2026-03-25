@@ -93,16 +93,23 @@ public class VenueReservationController {
 
   @Async("virtualThreadPool")
   @GetMapping("/court/{courtId}")
-  public CompletableFuture<Result<?>> getReservationsByCourtId(@PathVariable Integer courtId) {
-    try {
-      return CompletableFuture.completedFuture(Result.success(reservationService.getReservationsByCourtId(courtId)));
-    } catch (Exception e) {
-      e.printStackTrace();
-      return CompletableFuture.completedFuture(Result.fail(500, "获取场地预约失败：" + e.getMessage()));
-    }
+  public CompletableFuture<Result<?>> getReservationsByCourtId(
+          @PathVariable Integer courtId,
+          @RequestHeader(value = "Authorization") String authorization) {
+      try {
+          Integer currentUserId = getUserIdFromToken(authorization);
+          return CompletableFuture.completedFuture(Result.success(
+                  reservationService.getReservationsByCourtId(courtId, currentUserId)));
+      } catch (Exception e) {
+          e.printStackTrace();
+          return CompletableFuture.completedFuture(Result.fail(500, "获取场地预约失败：" + e.getMessage()));
+      }
   }
 
-  private Integer getUserIdFromToken(String authorization) {
-    return jwtUtil.getUserIdFromToken(jwtUtil.extractToken(authorization));
-  }
+    private Integer getUserIdFromToken(String authorization) {
+        if (authorization == null || authorization.isEmpty()) {
+            return null;
+        }
+        return jwtUtil.getUserIdFromToken(jwtUtil.extractToken(authorization));
+    }
 }

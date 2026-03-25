@@ -10,6 +10,8 @@ import com.campus.forum.sports.service.CourtService;
 import com.campus.forum.common.util.RedisDistributedLockUtil;
 import com.campus.forum.common.util.RedisRateLimiterUtil;
 import com.campus.forum.common.util.RedisCacheUtil;
+import com.campus.forum.user.entity.User;
+import com.campus.forum.user.repository.UserRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
@@ -19,13 +21,16 @@ import java.time.LocalTime;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 public class VenueReservationServiceImpl implements VenueReservationService {
   private final VenueReservationRepository reservationRepository;
   private final CourtRepository courtRepository;
   private final CourtService courtService;
+    private final UserRepository userRepository;
 
   @Resource
   private RedisDistributedLockUtil redisDistributedLockUtil;
@@ -35,10 +40,11 @@ public class VenueReservationServiceImpl implements VenueReservationService {
   private RedisCacheUtil redisCacheUtil;
 
   public VenueReservationServiceImpl(VenueReservationRepository reservationRepository, CourtRepository courtRepository,
-      CourtService courtService) {
+                                     CourtService courtService, UserRepository userRepository) {
     this.reservationRepository = reservationRepository;
     this.courtRepository = courtRepository;
     this.courtService = courtService;
+      this.userRepository = userRepository;
   }
 
   @Override
@@ -264,22 +270,59 @@ public class VenueReservationServiceImpl implements VenueReservationService {
     }
   }
 
-  @Override
-  public List<VenueReservation> getReservationsByUserId(Integer userId) {
-    return reservationRepository.findByUserId(userId);
-  }
+    @Override
+    public List<VenueReservation> getReservationsByUserId(Integer userId) {
+        return reservationRepository.findByUserId(userId);
+    }
 
-  @Override
-  public List<VenueReservation> getReservationsByCourtId(Integer courtId) {
-    return reservationRepository.findByCourtIdAndStatus(courtId, "active");
-  }
+    /**
+     * ✅ 批量查询优化版 - 获取场地的所有预约
+     */
+    @Override
+    public List<VenueReservation> getReservationsByCourtId(Integer courtId, Integer currentUserId) {
+        // 获取该场地所有活跃的预约
+        List<VenueReservation> reservations = reservationRepository.findByCourtIdAndStatus(courtId, "active");
 
-  @Override
-  public VenueReservation getReservationById(Integer id) {
-    return reservationRepository.findById(id).orElse(null);
-  }
+        if (reservations.isEmpty()) {
+            return reservations;
+        }
 
-  @Override
+        // 批量获取所有预约的用户ID（去重）
+        List<Integer> userIds = reservations.stream()
+                .map(VenueReservation::getUserId)
+                .distinct()
+                .collect(Collectors.toList());
+
+        // 批量查询用户信息
+        Map<Integer, User> userMap = userRepository.findAllById(userIds)
+                .stream()
+                .collect(Collectors.toMap(User::getId, user -> user));
+
+        // 填充数据
+        for (VenueReservation reservation : reservations) {
+            Integer userId = reservation.getUserId();
+            User user = userMap.get(userId);
+
+            // 设置用户名
+            if (user != null && user.getUsername() != null) {
+                reservation.setUserName(user.getUsername());
+            } else {
+                reservation.setUserName("用户" + userId);
+            }
+
+            // 设置是否是当前用户
+            reservation.setIsOwner(currentUserId != null && currentUserId.equals(userId));
+        }
+
+        return reservations;
+    }
+
+    @Override
+    public VenueReservation getReservationById(Integer id) {
+        return reservationRepository.findById(id).orElse(null);
+    }
+
+    @Override
   @Transactional
   public void processExpiredReservations() {
     List<VenueReservation> activeReservations = reservationRepository.findByStatus("active");
@@ -300,4 +343,8 @@ public class VenueReservationServiceImpl implements VenueReservationService {
       }
     }
   }
+
+    public UserRepository getUserRepository() {
+        return userRepository;
+    }
 }
