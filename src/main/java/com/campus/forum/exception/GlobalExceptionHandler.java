@@ -1,11 +1,15 @@
 package com.campus.forum.exception;
 
 import com.campus.forum.common.Result;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.Example;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+    private static final Logger logger = LoggerFactory.getLogger(Example.class);
 
     /**
      * 处理业务异常
@@ -20,7 +24,7 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(RuntimeException.class)
     public Result<?> handleRuntimeException(RuntimeException e) {
-        e.printStackTrace();
+        logger.error("操作失败，原因: {}", e.getMessage(), e);
         return Result.fail(500, e.getMessage());
     }
 
@@ -29,7 +33,7 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(Exception.class)
     public Result<?> handleException(Exception e) {
-        e.printStackTrace();
+        logger.error("操作失败，原因: {}", e.getMessage(), e);
         return Result.fail(500, "系统内部错误");
     }
 }

@@ -10,6 +10,11 @@ public interface CommentService {
     Comment createComment(Comment comment);
 
     /**
+     * 发表评论（带图片）
+     */
+    Comment createComment(Comment comment, java.util.List<String> imageUrls);
+
+    /**
      * 根据帖子ID查询评论
      */
     List<Comment> getCommentsByPostId(Integer postId);

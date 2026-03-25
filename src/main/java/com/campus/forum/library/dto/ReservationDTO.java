@@ -6,7 +6,6 @@ import java.time.LocalTime;
 
 @Data
 public class ReservationDTO {
-  private Integer userId;
   private Integer seatId;
   private Integer classroomId;
   private LocalDate reserveDate;

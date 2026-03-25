@@ -57,4 +57,8 @@ public class Reservation {
   @ManyToOne
   @JoinColumn(name = "classroom_id", insertable = false, updatable = false)
   private Classroom classroom;
+
+  @Version
+  @Column(name = "version")
+  private Integer version = 1;
 }

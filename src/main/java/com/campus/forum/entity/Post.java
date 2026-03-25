@@ -28,6 +28,20 @@ public class Post {
   @Column(name = "create_time")
   private LocalDateTime createTime;
 
+  @Column(name = "audit_status", columnDefinition = "INT DEFAULT 0")
+  private Integer auditStatus;
+
   @OneToMany(mappedBy = "post", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+  @org.hibernate.annotations.BatchSize(size = 10)
   private List<Comment> comments;
+
+  @OneToMany(mappedBy = "post", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+  private List<PostImage> images;
+
+  @PrePersist
+  public void prePersist() {
+    if (auditStatus == null) {
+      auditStatus = 0;
+    }
+  }
 }

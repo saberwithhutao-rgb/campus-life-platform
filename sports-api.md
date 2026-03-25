@@ -211,6 +211,7 @@
 | **URL**      | `/api/sports/reservations`                                                                                                                                                                                                                              |
 | **描述**     | 创建新的场地预约，预约创建成功后场地状态变更为reserved                                                                                                                                                                                                  |
 | **业务校验** | 1. 用户预约数量校验：一个用户最多同时预约 3 个场地，当活跃预约数≥3时，不允许创建新预约<br>2. 时间合法性校验：预约日期 + 开始时间 必须 晚于当前系统时间<br>3. 时间段重叠校验：同一场地、同一日期、时间段有任何重叠，且预约状态为active，则不允许重复预约 |
+| **技术特性** | 支持Redis缓存、Redis限流、Redis分布式锁、数据库乐观锁                                                                                                                                                                                                   |
 
 **请求体**：
 
@@ -242,47 +243,45 @@
 
 ```json
 {
-  "code": 2
+  "code": 200,
+  "msg": "success",
+  "data": {
+    "id": 10,
+    "userId": 1,
+    "courtId": 5,
+    "venueId": 1,
+    "reserveDate": "2026-03-10",
+    "startTime": "14:00",
+    "duration": 120,
+    "endTime": "16:00",
+    "type": "reservation",
+    "status": "active",
+    "createdAt": "2026-03-10T13:30:00",
+    "actualEndTime": null,
+    "actualDuration": null,
+    "version": 1
+  }
+}
 ```
-
-00,
-"msg": "success",
-"data": {
-"id": 10,
-"userId": 1,
-"courtId": 5,
-"venueId": 1,
-"reserveDate": "2026-03-10",
-"startTime": "14:00",
-"duration": 120,
-"endTime": "16:00",
-"type": "reservation",
-"status": "active",
-"createdAt": "2026-03-10T13:30:00",
-"actualEndTime": null,
-"actualDuration": null
-}
-}
-
-````
 
 **响应字段说明**：
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| id | Integer | 预约ID |
-| userId | Integer | 用户ID |
-| courtId | Integer | 场地ID |
-| venueId | Integer | 场馆ID |
-| reserveDate | LocalDate | 预约日期 |
-| startTime | LocalTime | 开始时间 |
-| duration | Integer | 预约时长（分钟） |
-| endTime | LocalTime | 结束时间 |
-| type | String | 预约类型：reservation-预约，occupation-占用 |
-| status | String | 预约状态 |
-| createdAt | LocalDateTime | 创建时间 |
-| actualEndTime | LocalDateTime | 实际结束时间（预约被占用/取消/完成时设置） |
-| actualDuration | Integer | 实际使用时长（分钟） |
+| 字段           | 类型          | 说明                                        |
+| -------------- | ------------- | ------------------------------------------- |
+| id             | Integer       | 预约ID                                      |
+| userId         | Integer       | 用户ID                                      |
+| courtId        | Integer       | 场地ID                                      |
+| venueId        | Integer       | 场馆ID                                      |
+| reserveDate    | LocalDate     | 预约日期                                    |
+| startTime      | LocalTime     | 开始时间                                    |
+| duration       | Integer       | 预约时长（分钟）                            |
+| endTime        | LocalTime     | 结束时间                                    |
+| type           | String        | 预约类型：reservation-预约，occupation-占用 |
+| status         | String        | 预约状态                                    |
+| createdAt      | LocalDateTime | 创建时间                                    |
+| actualEndTime  | LocalDateTime | 实际结束时间（预约被占用/取消/完成时设置）  |
+| actualDuration | Integer       | 实际使用时长（分钟）                        |
+| version        | Integer       | 乐观锁版本号，每次更新时自动递增            |
 
 **错误响应示例**：
 
@@ -292,7 +291,7 @@
   "msg": "创建预约失败：该时间段已被预约",
   "data": null
 }
-````
+```
 
 ```json
 {
@@ -310,6 +309,14 @@
 }
 ```
 
+```json
+{
+  "code": 500,
+  "msg": "操作失败：该场地信息已被其他用户修改，请刷新页面后重试",
+  "data": null
+}
+```
+
 ---
 
 ### 3.2 占用场地
@@ -321,6 +328,7 @@
 | **URL**      | `/api/sports/reservations/{id}/occupy`                                                                                                                                                                                                                                              |
 | **描述**     | 占用他人的预约场地，创建新的占用记录，原预约状态变更为replaced                                                                                                                                                                                                                      |
 | **业务校验** | 1. 预约状态校验：预约状态必须为active<br>2. 操作者校验：不能占用自己的预约<br>3. 时间校验：预约开始时间（reserveDate + startTime）已超过30分钟<br>4. 场地状态校验：场地状态必须为reserved<br>5. 用户预约数量校验：一个用户最多同时预约 3 个场地，当活跃预约数≥3时，不允许占用新场地 |
+| **技术特性** | 支持Redis缓存、Redis限流、Redis分布式锁、数据库乐观锁                                                                                                                                                                                                                               |
 
 **路径参数**：
 
@@ -359,7 +367,8 @@ POST /api/sports/reservations/10/occupy?userId=2
     "status": "active",
     "createdAt": "2026-03-10T14:35:00",
     "actualEndTime": null,
-    "actualDuration": null
+    "actualDuration": null,
+    "version": 1
   }
 }
 ```
@@ -390,6 +399,14 @@ POST /api/sports/reservations/10/occupy?userId=2
 }
 ```
 
+```json
+{
+  "code": 500,
+  "msg": "操作失败：该场地信息已被其他用户修改，请刷新页面后重试",
+  "data": null
+}
+```
+
 ---
 
 ### 3.3 离开场地
@@ -400,6 +417,7 @@ POST /api/sports/reservations/10/occupy?userId=2
 | **请求方式** | POST                                                               |
 | **URL**      | `/api/sports/reservations/{id}/leave`                              |
 | **描述**     | 用户主动离开场地，预约状态变更为cancelled，场地状态恢复为available |
+| **技术特性** | 支持Redis缓存、Redis限流、Redis分布式锁、数据库乐观锁              |
 
 **路径参数**：
 
@@ -435,6 +453,14 @@ POST /api/sports/reservations/10/leave?userId=1
 {
   "code": 500,
   "msg": "离开场地失败：只能离开自己的预约",
+  "data": null
+}
+```
+
+```json
+{
+  "code": 500,
+  "msg": "操作失败：该场地信息已被其他用户修改，请刷新页面后重试",
   "data": null
 }
 ```
@@ -476,7 +502,8 @@ POST /api/sports/reservations/10/leave?userId=1
       "status": "replaced",
       "createdAt": "2026-03-10T13:30:00",
       "actualEndTime": "2026-03-10T14:35:00",
-      "actualDuration": 65
+      "actualDuration": 65,
+      "version": 2
     },
     {
       "id": 11,
@@ -491,7 +518,8 @@ POST /api/sports/reservations/10/leave?userId=1
       "status": "active",
       "createdAt": "2026-03-10T14:35:00",
       "actualEndTime": null,
-      "actualDuration": null
+      "actualDuration": null,
+      "version": 1
     }
   ]
 }
@@ -534,7 +562,8 @@ POST /api/sports/reservations/10/leave?userId=1
       "type": "reservation",
       "createdAt": "2026-03-09T10:00:00",
       "actualEndTime": null,
-      "actualDuration": null
+      "actualDuration": null,
+      "version": 1
     },
     {
       "id": 68,
@@ -549,7 +578,8 @@ POST /api/sports/reservations/10/leave?userId=1
       "type": "reservation",
       "createdAt": "2026-03-09T15:00:00",
       "actualEndTime": null,
-      "actualDuration": null
+      "actualDuration": null,
+      "version": 1
     }
   ]
 }
@@ -670,21 +700,22 @@ POST /api/sports/reservations/10/leave?userId=1
 
 ### 7.3 VenueReservation（预约记录）
 
-| 字段           | 类型          | 说明             |
-| -------------- | ------------- | ---------------- |
-| id             | Integer       | 预约ID           |
-| userId         | Integer       | 用户ID           |
-| courtId        | Integer       | 场地ID           |
-| venueId        | Integer       | 场馆ID           |
-| reserveDate    | LocalDate     | 预约日期         |
-| startTime      | LocalTime     | 开始时间         |
-| duration       | Integer       | 预约时长（分钟） |
-| endTime        | LocalTime     | 结束时间         |
-| type           | String        | 预约类型         |
-| status         | String        | 预约状态         |
-| createdAt      | LocalDateTime | 创建时间         |
-| actualEndTime  | LocalDateTime | 实际结束时间     |
-| actualDuration | Integer       | 实际使用时长     |
+| 字段           | 类型          | 说明                             |
+| -------------- | ------------- | -------------------------------- |
+| id             | Integer       | 预约ID                           |
+| userId         | Integer       | 用户ID                           |
+| courtId        | Integer       | 场地ID                           |
+| venueId        | Integer       | 场馆ID                           |
+| reserveDate    | LocalDate     | 预约日期                         |
+| startTime      | LocalTime     | 开始时间                         |
+| duration       | Integer       | 预约时长（分钟）                 |
+| endTime        | LocalTime     | 结束时间                         |
+| type           | String        | 预约类型                         |
+| status         | String        | 预约状态                         |
+| createdAt      | LocalDateTime | 创建时间                         |
+| actualEndTime  | LocalDateTime | 实际结束时间                     |
+| actualDuration | Integer       | 实际使用时长                     |
+| version        | Integer       | 乐观锁版本号，每次更新时自动递增 |
 
 ---
 
@@ -703,5 +734,47 @@ POST /api/sports/reservations/10/leave?userId=1
 
 ---
 
-_文档版本：v1.1_
-_最后更新时间：2026-03-11_
+## 9. Java 虚拟线程技术实现
+
+### 9.1 概述
+
+为提高高并发场景下的性能，体育馆场地预约模块的核心接口已集成 Java 21 虚拟线程技术。虚拟线程是 Java 21 引入的轻量级线程，适合处理 I/O 密集型操作，如数据库查询、网络请求等。
+
+### 9.2 使用虚拟线程的接口
+
+| 接口名称         | URL                                        | 请求方式 |
+| ---------------- | ------------------------------------------ | -------- |
+| 创建预约         | `/api/sports/reservations`                 | POST     |
+| 占用场地         | `/api/sports/reservations/{id}/occupy`     | POST     |
+| 离开场地         | `/api/sports/reservations/{id}/leave`      | POST     |
+| 查询用户预约记录 | `/api/sports/reservations/user/{userId}`   | GET      |
+| 查询场地当前预约 | `/api/sports/reservations/court/{courtId}` | GET      |
+
+### 9.3 虚拟线程配置参数
+
+| 配置项         | 值                     | 说明                           |
+| -------------- | ---------------------- | ------------------------------ |
+| 线程池名称     | `virtualThreadPool`    | 虚拟线程池的 Bean 名称         |
+| 平台线程核心数 | 10                     | 作为载体的平台线程池核心线程数 |
+| 平台线程最大数 | 20                     | 作为载体的平台线程池最大线程数 |
+| 队列容量       | 100                    | 平台线程池的队列容量           |
+| 线程名称前缀   | `virtual-reservation-` | 虚拟线程的名称前缀             |
+
+### 9.4 实现逻辑
+
+1. **线程池配置**：创建 `VirtualThreadPoolConfig` 类，定义虚拟线程池 Bean
+2. **接口标注**：在高并发接口上使用 `@Async("virtualThreadPool")` 注解
+3. **返回值调整**：将接口返回类型改为 `CompletableFuture<Result<?>>` 以支持异步操作
+4. **局部生效**：只在体育馆预约模块的核心接口使用，其他模块保持默认线程池
+
+### 9.5 性能影响
+
+- **吞吐量提升**：虚拟线程的轻量级特性使得系统能够同时处理更多的并发请求
+- **响应时间优化**：I/O 操作期间线程不会被阻塞，提高了系统响应速度
+- **资源利用率**：虚拟线程的创建和调度成本远低于传统线程，减少了系统资源消耗
+- **可扩展性**：在高并发场景下，系统能够更好地应对流量峰值
+
+---
+
+_文档版本：v1.2_
+_最后更新时间：2026-03-19_

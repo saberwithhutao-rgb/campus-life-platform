@@ -5,7 +5,7 @@ import com.campus.forum.library.dto.ReservationDTO;
 import java.util.List;
 
 public interface ReservationService {
-  Reservation createReservation(ReservationDTO reservationDTO);
+  Reservation createReservation(ReservationDTO reservationDTO, Integer userId);
 
   Reservation occupySeat(Integer reservationId, Integer userId);
 

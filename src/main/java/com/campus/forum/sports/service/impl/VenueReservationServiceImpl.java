@@ -7,19 +7,32 @@ import com.campus.forum.sports.repository.VenueReservationRepository;
 import com.campus.forum.sports.repository.CourtRepository;
 import com.campus.forum.sports.service.VenueReservationService;
 import com.campus.forum.sports.service.CourtService;
+import com.campus.forum.common.util.RedisDistributedLockUtil;
+import com.campus.forum.common.util.RedisRateLimiterUtil;
+import com.campus.forum.common.util.RedisCacheUtil;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
+import jakarta.annotation.Resource;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.UUID;
 
 @Service
 public class VenueReservationServiceImpl implements VenueReservationService {
   private final VenueReservationRepository reservationRepository;
   private final CourtRepository courtRepository;
   private final CourtService courtService;
+
+  @Resource
+  private RedisDistributedLockUtil redisDistributedLockUtil;
+  @Resource
+  private RedisRateLimiterUtil redisRateLimiterUtil;
+  @Resource
+  private RedisCacheUtil redisCacheUtil;
 
   public VenueReservationServiceImpl(VenueReservationRepository reservationRepository, CourtRepository courtRepository,
       CourtService courtService) {
@@ -30,12 +43,17 @@ public class VenueReservationServiceImpl implements VenueReservationService {
 
   @Override
   @Transactional
-  public VenueReservation createReservation(VenueReservationDTO reservationDTO) {
+  public VenueReservation createReservation(VenueReservationDTO reservationDTO, Integer userId) {
+    // 检查限流 - 高并发预约模块专用
+    if (!redisRateLimiterUtil.checkReservationRateLimit(userId.toString())) {
+      throw new IllegalArgumentException("请求过于频繁，请稍后再试");
+    }
+
     // 检查用户活跃预约数量 - 统计当前用户所有 status = 'active' 的预约/占用记录总数（包括 reservation 和
     // occupation 类型）
     // 只有当活跃记录数量 >= 3 时，才阻止新的预约/占用操作
     // 单次预约中，用户选择 1 个场地，只要当前活跃记录数 < 3，就允许提交
-    long activeCount = reservationRepository.countActiveReservationsByUserId(reservationDTO.getUserId());
+    long activeCount = reservationRepository.countActiveReservationsByUserId(userId);
     if (activeCount >= 3) {
       throw new IllegalArgumentException("您最多只能同时预约2个场地，请先完成或取消后再预约");
     }
@@ -52,38 +70,67 @@ public class VenueReservationServiceImpl implements VenueReservationService {
       throw new IllegalArgumentException("预约时间不能早于当前时间");
     }
 
-    // 检查时间重叠
-    List<VenueReservation> overlappingReservations = reservationRepository.findOverlappingReservations(
-        reservationDTO.getCourtId(), reserveDate, startTime, endTime);
-    if (!overlappingReservations.isEmpty()) {
-      throw new IllegalArgumentException("该时间段已被预约");
+    // 生成分布式锁键 - 高并发预约模块专用
+    String lockKey = redisDistributedLockUtil.generateLockKey(
+        "sports:court",
+        reservationDTO.getCourtId().toString(),
+        reservationDTO.getReserveDate() + "-" + reservationDTO.getStartTime());
+    String requestId = UUID.randomUUID().toString();
+    int expireTime = 30; // 锁过期时间30秒
+
+    try {
+      // 获取分布式锁 - 高并发预约模块专用
+      if (!redisDistributedLockUtil.acquireLock(lockKey, requestId, expireTime)) {
+        throw new IllegalArgumentException("系统繁忙，请稍后再试");
+      }
+
+      // 检查时间重叠
+      List<VenueReservation> overlappingReservations = reservationRepository.findOverlappingReservations(
+          reservationDTO.getCourtId(), reserveDate, startTime, endTime);
+      if (!overlappingReservations.isEmpty()) {
+        throw new IllegalArgumentException("该时间段已被预约");
+      }
+
+      // 创建预约
+      VenueReservation reservation = new VenueReservation();
+      reservation.setUserId(userId);
+      reservation.setCourtId(reservationDTO.getCourtId());
+      reservation.setVenueId(reservationDTO.getVenueId());
+      reservation.setReserveDate(reserveDate);
+      reservation.setStartTime(startTime);
+      reservation.setDuration(reservationDTO.getDuration());
+      reservation.setEndTime(endTime);
+      reservation.setType("reservation");
+      reservation.setStatus("active");
+      reservation.setCreatedAt(LocalDateTime.now());
+
+      // 保存预约
+      VenueReservation savedReservation = reservationRepository.save(reservation);
+
+      // 更新场地状态
+      courtService.updateCourtStatus(reservationDTO.getCourtId(), "reserved");
+
+      // 清除缓存 - 高并发预约模块专用
+      redisCacheUtil.clearVenueReservationCache(reservationDTO.getCourtId().longValue(),
+          reservationDTO.getReserveDate());
+
+      return savedReservation;
+    } catch (ObjectOptimisticLockingFailureException e) {
+      throw new IllegalArgumentException("操作失败：该场地信息已被其他用户修改，请刷新页面后重试");
+    } finally {
+      // 释放分布式锁 - 高并发预约模块专用
+      redisDistributedLockUtil.releaseLock(lockKey, requestId);
     }
-
-    // 创建预约
-    VenueReservation reservation = new VenueReservation();
-    reservation.setUserId(reservationDTO.getUserId());
-    reservation.setCourtId(reservationDTO.getCourtId());
-    reservation.setVenueId(reservationDTO.getVenueId());
-    reservation.setReserveDate(reserveDate);
-    reservation.setStartTime(startTime);
-    reservation.setDuration(reservationDTO.getDuration());
-    reservation.setEndTime(endTime);
-    reservation.setType("reservation");
-    reservation.setStatus("active");
-    reservation.setCreatedAt(LocalDateTime.now());
-
-    // 保存预约
-    VenueReservation savedReservation = reservationRepository.save(reservation);
-
-    // 更新场地状态
-    courtService.updateCourtStatus(reservationDTO.getCourtId(), "reserved");
-
-    return savedReservation;
   }
 
   @Override
   @Transactional
   public VenueReservation occupyCourt(Integer reservationId, Integer userId) {
+    // 检查限流 - 高并发预约模块专用
+    if (!redisRateLimiterUtil.checkReservationRateLimit(userId.toString())) {
+      throw new IllegalArgumentException("请求过于频繁，请稍后再试");
+    }
+
     // 检查用户活跃预约数量 - 统计当前用户所有 status = 'active' 的预约/占用记录总数（包括 reservation 和
     // occupation 类型）
     // 只有当活跃记录数量 >= 3 时，才阻止新的预约/占用操作
@@ -117,72 +164,104 @@ public class VenueReservationServiceImpl implements VenueReservationService {
       throw new IllegalArgumentException("预约开始30分钟后才能占用");
     }
 
-    // 检查场地状态
-    Court court = courtRepository.findById(originalReservation.getCourtId()).orElse(null);
-    if (court == null || !"reserved".equals(court.getStatus())) {
-      throw new IllegalArgumentException("场地状态不正确");
+    // 生成分布式锁键 - 高并发预约模块专用
+    String lockKey = redisDistributedLockUtil.generateLockKey(
+        "sports:court",
+        originalReservation.getCourtId().toString(),
+        originalReservation.getReserveDate().toString() + "-" + originalReservation.getStartTime().toString());
+    String requestId = UUID.randomUUID().toString();
+    int expireTime = 30; // 锁过期时间30秒
+
+    try {
+      // 获取分布式锁 - 高并发预约模块专用
+      if (!redisDistributedLockUtil.acquireLock(lockKey, requestId, expireTime)) {
+        throw new IllegalArgumentException("系统繁忙，请稍后再试");
+      }
+
+      // 检查场地状态
+      Court court = courtRepository.findById(originalReservation.getCourtId()).orElse(null);
+      if (court == null || !"reserved".equals(court.getStatus())) {
+        throw new IllegalArgumentException("场地状态不正确");
+      }
+
+      // 更新原预约状态
+      originalReservation.setStatus("replaced");
+      originalReservation.setActualEndTime(now);
+      originalReservation.setActualDuration((int) (now.getHour() * 60 + now.getMinute() -
+          reservationTime.getHour() * 60 - reservationTime.getMinute()));
+      reservationRepository.save(originalReservation);
+
+      // 创建新的占用预约
+      VenueReservation occupation = new VenueReservation();
+      occupation.setUserId(userId);
+      occupation.setCourtId(originalReservation.getCourtId());
+      occupation.setVenueId(originalReservation.getVenueId());
+      occupation.setReserveDate(originalReservation.getReserveDate());
+      occupation.setStartTime(now.toLocalTime());
+      occupation.setDuration(
+          (int) (originalReservation.getEndTime().getHour() * 60 + originalReservation.getEndTime().getMinute() -
+              now.getHour() * 60 - now.getMinute()));
+      occupation.setEndTime(originalReservation.getEndTime());
+      occupation.setType("occupation");
+      occupation.setStatus("active");
+      occupation.setCreatedAt(now);
+
+      // 保存占用预约
+      VenueReservation savedOccupation = reservationRepository.save(occupation);
+
+      // 更新场地状态
+      courtService.updateCourtStatus(originalReservation.getCourtId(), "occupied");
+
+      // 清除缓存 - 高并发预约模块专用
+      redisCacheUtil.clearVenueReservationCache(originalReservation.getCourtId().longValue(),
+          originalReservation.getReserveDate().toString());
+
+      return savedOccupation;
+    } catch (ObjectOptimisticLockingFailureException e) {
+      throw new IllegalArgumentException("操作失败：该场地信息已被其他用户修改，请刷新页面后重试");
+    } finally {
+      // 释放分布式锁 - 高并发预约模块专用
+      redisDistributedLockUtil.releaseLock(lockKey, requestId);
     }
-
-    // 更新原预约状态
-    originalReservation.setStatus("replaced");
-    originalReservation.setActualEndTime(now);
-    originalReservation.setActualDuration((int) (now.getHour() * 60 + now.getMinute() -
-        reservationTime.getHour() * 60 - reservationTime.getMinute()));
-    reservationRepository.save(originalReservation);
-
-    // 创建新的占用预约
-    VenueReservation occupation = new VenueReservation();
-    occupation.setUserId(userId);
-    occupation.setCourtId(originalReservation.getCourtId());
-    occupation.setVenueId(originalReservation.getVenueId());
-    occupation.setReserveDate(originalReservation.getReserveDate());
-    occupation.setStartTime(now.toLocalTime());
-    occupation.setDuration(
-        (int) (originalReservation.getEndTime().getHour() * 60 + originalReservation.getEndTime().getMinute() -
-            now.getHour() * 60 - now.getMinute()));
-    occupation.setEndTime(originalReservation.getEndTime());
-    occupation.setType("occupation");
-    occupation.setStatus("active");
-    occupation.setCreatedAt(now);
-
-    // 保存占用预约
-    VenueReservation savedOccupation = reservationRepository.save(occupation);
-
-    // 更新场地状态
-    courtService.updateCourtStatus(originalReservation.getCourtId(), "occupied");
-
-    return savedOccupation;
   }
 
   @Override
   @Transactional
   public void leaveCourt(Integer reservationId, Integer userId) {
-    // 获取预约
-    VenueReservation reservation = reservationRepository.findById(reservationId).orElse(null);
-    if (reservation == null) {
-      throw new IllegalArgumentException("预约不存在");
+    try {
+      // 获取预约
+      VenueReservation reservation = reservationRepository.findById(reservationId).orElse(null);
+      if (reservation == null) {
+        throw new IllegalArgumentException("预约不存在");
+      }
+
+      // 检查是否是预约人本人
+      if (!reservation.getUserId().equals(userId)) {
+        throw new IllegalArgumentException("只能离开自己的预约");
+      }
+
+      // 检查预约状态
+      if (!"active".equals(reservation.getStatus())) {
+        throw new IllegalArgumentException("只能离开状态为active的预约");
+      }
+
+      // 更新预约状态
+      reservation.setStatus("cancelled");
+      reservation.setActualEndTime(LocalDateTime.now());
+      reservation.setActualDuration(
+          (int) (reservation.getActualEndTime().getHour() * 60 + reservation.getActualEndTime().getMinute() -
+              reservation.getStartTime().getHour() * 60 - reservation.getStartTime().getMinute()));
+      reservationRepository.save(reservation);
+
+      // 更新场地状态
+      courtService.updateCourtStatus(reservation.getCourtId(), "available");
+
+      // 清除缓存 - 高并发预约模块专用
+      redisCacheUtil.clearVenueReservationCache(reservation.getCourtId().longValue(),
+          reservation.getReserveDate().toString());
+    } catch (ObjectOptimisticLockingFailureException e) {
+      throw new IllegalArgumentException("操作失败：该场地信息已被其他用户修改，请刷新页面后重试");
     }
-
-    // 检查是否是预约人本人
-    if (!reservation.getUserId().equals(userId)) {
-      throw new IllegalArgumentException("只能离开自己的预约");
-    }
-
-    // 检查预约状态
-    if (!"active".equals(reservation.getStatus())) {
-      throw new IllegalArgumentException("只能离开状态为active的预约");
-    }
-
-    // 更新预约状态
-    reservation.setStatus("cancelled");
-    reservation.setActualEndTime(LocalDateTime.now());
-    reservation.setActualDuration(
-        (int) (reservation.getActualEndTime().getHour() * 60 + reservation.getActualEndTime().getMinute() -
-            reservation.getStartTime().getHour() * 60 - reservation.getStartTime().getMinute()));
-    reservationRepository.save(reservation);
-
-    // 更新场地状态
-    courtService.updateCourtStatus(reservation.getCourtId(), "available");
   }
 
   @Override

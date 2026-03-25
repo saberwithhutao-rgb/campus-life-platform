@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import lombok.Data;
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Data
 @Entity
@@ -25,8 +26,22 @@ public class Comment {
   @Column(name = "create_time")
   private LocalDateTime createTime;
 
+  @Column(name = "audit_status", columnDefinition = "INT DEFAULT 0")
+  private Integer auditStatus;
+
   @ManyToOne
   @JoinColumn(name = "post_id", insertable = false, updatable = false)
   @JsonIgnore
   private Post post;
+
+  @OneToMany(mappedBy = "comment", cascade = CascadeType.ALL, fetch = FetchType.LAZY, orphanRemoval = true)
+  @org.hibernate.annotations.BatchSize(size = 10)
+  private List<CommentImage> images = new java.util.ArrayList<>();
+
+  @PrePersist
+  public void prePersist() {
+    if (auditStatus == null) {
+      auditStatus = 0;
+    }
+  }
 }

@@ -5,13 +5,18 @@ import com.campus.forum.sports.entity.Court;
 import com.campus.forum.sports.repository.VenueRepository;
 import com.campus.forum.sports.repository.CourtRepository;
 import com.campus.forum.sports.service.VenueService;
+import com.campus.forum.common.util.RedisCacheUtil;
 import org.springframework.stereotype.Service;
+import jakarta.annotation.Resource;
 import java.util.List;
 
 @Service
 public class VenueServiceImpl implements VenueService {
   private final VenueRepository venueRepository;
   private final CourtRepository courtRepository;
+  
+  @Resource
+  private RedisCacheUtil redisCacheUtil;
 
   public VenueServiceImpl(VenueRepository venueRepository, CourtRepository courtRepository) {
     this.venueRepository = venueRepository;
@@ -20,7 +25,13 @@ public class VenueServiceImpl implements VenueService {
 
   @Override
   public List<Venue> getAllVenues() {
-    return venueRepository.findAll();
+    String cacheKey = "sports:venues:all";
+    List<Venue> venues = redisCacheUtil.getCache(cacheKey);
+    if (venues == null) {
+      venues = venueRepository.findAll();
+      redisCacheUtil.setCache(cacheKey, venues, 3600);
+    }
+    return venues;
   }
 
   @Override

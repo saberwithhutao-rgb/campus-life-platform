@@ -7,17 +7,54 @@ spring:
   jpa:
     hibernate:
       ddl-auto: update
+    show-sql: false
     properties:
       hibernate:
-        dialect: org.hibernate.dialect.PostgreSQLDialect
-        use_sql_comments: true
+        format_sql: true
         naming:
           physical-strategy: org.hibernate.boot.model.naming.PhysicalNamingStrategyStandardImpl
           implicit-strategy: org.hibernate.boot.model.naming.ImplicitNamingStrategyJpaCompliantImpl
-
+  redis:
+    host: 127.0.0.1
+    port: 6379
+    password:
+    lettuce:
+      pool:
+        max-active: 8
+        max-idle: 8
+        min-idle: 0
+        max-wait: -1ms
+  jackson:
+    date-format: yyyy-MM-dd HH:mm:ss
+    serialization:
+      write-dates-as-timestamps: false
+  web:
+    resources:
+      static-locations: file:./uploads/, classpath:/static/
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: 5MB
+      max-request-size: 20MB
 
 server:
   port: 8082
 
 jwt:
   secret: ${JWT_SECRET}
+  
+ # 百度云内容审核配置
+baidu:
+  cloud:
+    appid: ${BAIDU_APPID:}
+    apikey: ${BAIDU_APIKEY:}
+    secretkey: ${BAIDU_SECRETKEY:}
+
+# 异步线程池配置
+async:
+  pool:
+    core-size: 5
+    max-size: 10
+    queue-capacity: 500
+    keep-alive-seconds: 60
+    thread-name-prefix: audit-task-

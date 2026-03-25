@@ -5,7 +5,7 @@ import com.campus.forum.sports.dto.VenueReservationDTO;
 import java.util.List;
 
 public interface VenueReservationService {
-  VenueReservation createReservation(VenueReservationDTO reservationDTO);
+  VenueReservation createReservation(VenueReservationDTO reservationDTO, Integer userId);
   VenueReservation occupyCourt(Integer reservationId, Integer userId);
   void leaveCourt(Integer reservationId, Integer userId);
   List<VenueReservation> getReservationsByUserId(Integer userId);

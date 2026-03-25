@@ -1,9 +1,12 @@
 package com.campus.forum.controller;
 
 import com.campus.forum.common.Result;
-import com.campus.forum.common.annotation.CurrentUser;
+import com.campus.forum.dto.PostCreateDTO;
 import com.campus.forum.entity.Post;
+import com.campus.forum.repository.PostRepository;
+import com.campus.forum.service.CommentService;
 import com.campus.forum.service.PostService;
+import com.campus.forum.util.JwtUtil;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -14,40 +17,61 @@ import java.util.HashMap;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/forum/posts")
+@RequestMapping({ "/api/posts" })
 public class PostController {
 
   private final PostService postService;
+  private final CommentService commentService;
+  private final PostRepository postRepository;
+  private final JwtUtil jwtUtil;
 
-  public PostController(PostService postService) {
+  public PostController(PostService postService, CommentService commentService, PostRepository postRepository, JwtUtil jwtUtil) {
     this.postService = postService;
+    this.commentService = commentService;
+    this.postRepository = postRepository;
+    this.jwtUtil = jwtUtil;
   }
 
   /**
    * 发布帖子
    */
   @PostMapping
-  public Result<Post> createPost(@RequestBody Post post, @CurrentUser Integer userId) {
+  public Result<Post> createPost(
+      @RequestBody PostCreateDTO postCreateDTO,
+      @RequestHeader(value = "Authorization") String authorization) {
     try {
+      // 从token解析用户ID
+      Integer userId = getUserIdFromToken(authorization);
+      
       // 参数校验
-      if (post.getTitle() == null || post.getTitle().isEmpty()) {
+      if (postCreateDTO.getTitle() == null || postCreateDTO.getTitle().isEmpty()) {
         return Result.fail(400, "标题不能为空");
       }
-      if (post.getTitle().length() > 100) {
+      if (postCreateDTO.getTitle().length() > 100) {
         return Result.fail(400, "标题长度不能超过100个字符");
       }
-      if (post.getContent() == null || post.getContent().isEmpty()) {
+      if (postCreateDTO.getContent() == null || postCreateDTO.getContent().isEmpty()) {
         return Result.fail(400, "内容不能为空");
       }
-      if (post.getCategoryId() == null) {
+      if (postCreateDTO.getCategoryId() == null) {
         return Result.fail(400, "分类ID不能为空");
       }
 
+      Post post = new Post();
+      post.setTitle(postCreateDTO.getTitle());
+      post.setContent(postCreateDTO.getContent());
+      post.setCategoryId(postCreateDTO.getCategoryId());
       post.setUserId(userId);
-      Post createdPost = postService.createPost(post);
+      post.setCreateTime(postCreateDTO.getCreateTime());
+      // 明确设置auditStatus为0，确保等待百度审核结果
+      post.setAuditStatus(0);
+
+      Post createdPost = postService.createPost(post, postCreateDTO.getImageUrls());
       Result<Post> result = Result.success(createdPost);
       result.setMsg("发布成功");
       return result;
+    } catch (IllegalArgumentException e) {
+      return Result.fail(401, e.getMessage());
     } catch (Exception e) {
       e.printStackTrace();
       return Result.fail(500, "发布失败：" + e.getMessage());
@@ -155,6 +179,7 @@ public class PostController {
       if (id == null) {
         return Result.fail(400, "帖子ID不能为空");
       }
+      // 使用PostService的getPostById方法获取帖子信息
       Post post = postService.getPostById(id);
       return Result.success(post);
     } catch (Exception e) {
@@ -169,16 +194,33 @@ public class PostController {
   @DeleteMapping("/{id}")
   public Result<?> deletePost(
       @PathVariable Integer id,
-      @CurrentUser Integer userId) {
+      @RequestHeader(value = "Authorization") String authorization) {
     try {
+      // 从token解析用户ID
+      Integer userId = getUserIdFromToken(authorization);
+      
       if (id == null) {
         return Result.fail(400, "帖子ID不能为空");
       }
       postService.deletePost(id, userId);
       return Result.success(null);
+    } catch (IllegalArgumentException e) {
+      return Result.fail(401, e.getMessage());
     } catch (Exception e) {
       e.printStackTrace();
       return Result.fail(500, "删除失败：" + e.getMessage());
     }
   }
+
+  private Integer getUserIdFromToken(String authorization) {
+    return jwtUtil.getUserIdFromToken(jwtUtil.extractToken(authorization));
+  }
+
+    public CommentService getCommentService() {
+        return commentService;
+    }
+
+    public PostRepository getPostRepository() {
+        return postRepository;
+    }
 }

@@ -4,7 +4,6 @@ import lombok.Data;
 
 @Data
 public class VenueReservationDTO {
-  private Integer userId;
   private Integer courtId;
   private Integer venueId;
   private String reserveDate;

@@ -12,6 +12,11 @@ public interface PostService {
   Post createPost(Post post);
 
   /**
+   * 发布帖子（带图片）
+   */
+  Post createPost(Post post, java.util.List<String> imageUrls);
+
+  /**
    * 分页查询所有帖子
    */
   Page<Post> getAllPosts(Pageable pageable);
