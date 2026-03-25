@@ -37,9 +37,13 @@ public class ReservationController {
         } catch (IllegalArgumentException e) {
             log.warn("创建预约参数错误: {}", e.getMessage());
             return Result.fail(400, e.getMessage());
+        } catch (RuntimeException e) {
+            // 业务异常：如"不能预约已过去的时间段"、"该时间段已被预约"等
+            log.warn("创建预约业务异常: {}", e.getMessage());
+            return Result.fail(400, e.getMessage());
         } catch (Exception e) {
-            log.error("创建预约失败, userId: {}, seatId: {}", userId, reservationDTO.getSeatId(), e);
-            return Result.fail(500, "创建预约失败");
+            log.error("创建预约系统异常, userId: {}, seatId: {}", userId, reservationDTO.getSeatId(), e);
+            return Result.fail(500, "服务器内部错误，请稍后重试");
         }
     }
 
@@ -60,9 +64,12 @@ public class ReservationController {
         } catch (IllegalArgumentException e) {
             log.warn("占用座位参数错误: {}", e.getMessage());
             return Result.fail(400, e.getMessage());
+        } catch (RuntimeException e) {
+            log.warn("占用座位业务异常: {}", e.getMessage());
+            return Result.fail(400, e.getMessage());
         } catch (Exception e) {
-            log.error("占用座位失败, reservationId: {}, userId: {}", id, userId, e);
-            return Result.fail(500, "占用座位失败");
+            log.error("占用座位系统异常, reservationId: {}, userId: {}", id, userId, e);
+            return Result.fail(500, "服务器内部错误，请稍后重试");
         }
     }
 
@@ -83,9 +90,12 @@ public class ReservationController {
         } catch (IllegalArgumentException e) {
             log.warn("离开座位参数错误: {}", e.getMessage());
             return Result.fail(400, e.getMessage());
+        } catch (RuntimeException e) {
+            log.warn("离开座位业务异常: {}", e.getMessage());
+            return Result.fail(400, e.getMessage());
         } catch (Exception e) {
-            log.error("离开座位失败, reservationId: {}, userId: {}", id, userId, e);
-            return Result.fail(500, "离开座位失败");
+            log.error("离开座位系统异常, reservationId: {}, userId: {}", id, userId, e);
+            return Result.fail(500, "服务器内部错误，请稍后重试");
         }
     }
 
@@ -119,9 +129,6 @@ public class ReservationController {
         }
     }
 
-    /**
-     * 从Authorization header中提取并解析用户ID
-     */
     private Integer extractUserId(String authorization) {
         if (authorization == null || authorization.isEmpty()) {
             log.warn("Authorization header为空");
