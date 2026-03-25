@@ -3,12 +3,14 @@ package com.campus.forum.util;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
 
+@Slf4j
 @Component
 public class JwtUtil {
 
@@ -36,7 +38,28 @@ public class JwtUtil {
                     .parseSignedClaims(token)
                     .getPayload();
 
-            Object userId = claims.get("userId");
+            log.debug("Claims内容: {}", claims);
+
+            // ✅ 修改：优先从 sub 字段获取（JWT标准字段）
+            Object userId = claims.get("sub");
+
+            // 兼容其他可能的字段名
+            if (userId == null) {
+                userId = claims.get("userId");
+            }
+            if (userId == null) {
+                userId = claims.get("id");
+            }
+            if (userId == null) {
+                userId = claims.get("user_id");
+            }
+
+            if (userId == null) {
+                log.error("Token中未找到用户ID字段，可用字段: {}", claims.keySet());
+                throw new IllegalArgumentException("Token中未找到用户ID字段");
+            }
+
+            // 转换为 Integer
             if (userId instanceof Integer) {
                 return (Integer) userId;
             } else if (userId instanceof Long) {
@@ -45,8 +68,11 @@ public class JwtUtil {
                 return Integer.parseInt((String) userId);
             }
 
-            throw new IllegalArgumentException("无法从token中解析用户ID");
+            throw new IllegalArgumentException("无法从token中解析用户ID，字段值类型不支持: " +
+                    userId.getClass());
+
         } catch (Exception e) {
+            log.error("Token解析失败: {}", e.getMessage());
             throw new IllegalArgumentException("Token解析失败：" + e.getMessage());
         }
     }
@@ -60,11 +86,11 @@ public class JwtUtil {
         if (authorization == null || authorization.isEmpty()) {
             return null;
         }
-        
+
         if (authorization.startsWith("Bearer ")) {
             return authorization.substring(7);
         }
-        
+
         return authorization;
     }
 }
