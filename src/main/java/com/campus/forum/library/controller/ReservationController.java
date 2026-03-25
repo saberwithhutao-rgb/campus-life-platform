@@ -119,9 +119,12 @@ public class ReservationController {
     }
 
     @GetMapping("/seat/{seatId}")
-    public Result<List<Reservation>> getReservationBySeatId(@PathVariable Integer seatId) {
+    public Result<List<Reservation>> getReservationBySeatId(
+            @PathVariable Integer seatId,
+            @RequestHeader("Authorization") String authorization) {
         try {
-            List<Reservation> reservations = reservationService.getReservationBySeatId(seatId);
+            Integer currentUserId = extractUserId(authorization);
+            List<Reservation> reservations = reservationService.getReservationBySeatId(seatId, currentUserId);
             return Result.success(reservations);
         } catch (Exception e) {
             log.error("获取座位预约失败, seatId: {}", seatId, e);

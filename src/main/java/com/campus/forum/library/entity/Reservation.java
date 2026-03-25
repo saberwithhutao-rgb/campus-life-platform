@@ -61,4 +61,10 @@ public class Reservation {
   @Version
   @Column(name = "version")
   private Integer version = 1;
+
+    @Transient
+    private String userName;
+
+    @Transient
+    private Boolean isOwner;
 }

@@ -9,6 +9,8 @@ import com.campus.forum.library.util.TimeUtils;
 import com.campus.forum.common.util.RedisDistributedLockUtil;
 import com.campus.forum.common.util.RedisRateLimiterUtil;
 import com.campus.forum.common.util.RedisCacheUtil;
+import com.campus.forum.user.entity.User;
+import com.campus.forum.user.repository.UserRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -19,274 +21,279 @@ import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import jakarta.annotation.Resource;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 public class ReservationServiceImpl implements ReservationService {
-  private static final Logger log = LoggerFactory.getLogger(ReservationServiceImpl.class);
-  private final ReservationRepository reservationRepository;
-  private final SeatService seatService;
+    private static final Logger log = LoggerFactory.getLogger(ReservationServiceImpl.class);
+    private final ReservationRepository reservationRepository;
+    private final SeatService seatService;
+    private final UserRepository userRepository;
 
-  @Resource
-  private RedisDistributedLockUtil redisDistributedLockUtil;
-  @Resource
-  private RedisRateLimiterUtil redisRateLimiterUtil;
-  @Resource
-  private RedisCacheUtil redisCacheUtil;
+    @Resource
+    private RedisDistributedLockUtil redisDistributedLockUtil;
+    @Resource
+    private RedisRateLimiterUtil redisRateLimiterUtil;
+    @Resource
+    private RedisCacheUtil redisCacheUtil;
 
-  public ReservationServiceImpl(ReservationRepository reservationRepository, SeatService seatService) {
-    this.reservationRepository = reservationRepository;
-    this.seatService = seatService;
-  }
-
-  /**
-   * 检查用户是否有有效预约/占用
-   */
-  private void checkUserHasActiveReservation(Integer userId) {
-    List<Reservation> activeList = reservationRepository.findByUserIdAndStatus(userId, "active");
-    if (!activeList.isEmpty()) {
-      throw new RuntimeException("您已有正在进行的预约或占用，无法同时操作多个座位");
-    }
-  }
-
-  /**
-   * 检查用户活跃预约数量是否超过限制
-   */
-  private void checkUserActiveReservationLimit(Integer userId) {
-    int activeCount = reservationRepository.countActiveReservationsByUserId(userId);
-    if (activeCount >= 3) {
-      throw new RuntimeException("您最多只能同时预约/占用3个座位，请完成现有预约后再操作");
-    }
-  }
-
-  @Override
-  @Transactional(isolation = Isolation.SERIALIZABLE)
-  public Reservation createReservation(ReservationDTO reservationDTO, Integer userId) {
-    // 检查限流 - 高并发预约模块专用
-    if (!redisRateLimiterUtil.checkReservationRateLimit(userId.toString())) {
-      throw new RuntimeException("请求过于频繁，请稍后再试");
+    public ReservationServiceImpl(ReservationRepository reservationRepository,
+                                  SeatService seatService,
+                                  UserRepository userRepository) {
+        this.reservationRepository = reservationRepository;
+        this.seatService = seatService;
+        this.userRepository = userRepository;
     }
 
-    // 检查用户活跃预约数量是否超过限制
-    checkUserActiveReservationLimit(userId);
+    // ==================== 预约相关方法 ====================
 
-    // 检查预约时间是否合法
-    if (!TimeUtils.isReservationTimeValid(reservationDTO.getReserveDate(), reservationDTO.getStartTime())) {
-      throw new RuntimeException("不能预约已过去的时间段");
+    @Override
+    @Transactional(isolation = Isolation.SERIALIZABLE)
+    public Reservation createReservation(ReservationDTO reservationDTO, Integer userId) {
+        // 检查限流
+        if (!redisRateLimiterUtil.checkReservationRateLimit(userId.toString())) {
+            throw new RuntimeException("请求过于频繁，请稍后再试");
+        }
+
+        // 检查用户活跃预约数量
+        checkUserActiveReservationLimit(userId);
+
+        // 检查预约时间是否合法
+        if (!TimeUtils.isReservationTimeValid(reservationDTO.getReserveDate(), reservationDTO.getStartTime())) {
+            throw new RuntimeException("不能预约已过去的时间段");
+        }
+
+        String lockKey = redisDistributedLockUtil.generateLockKey(
+                "library:seat",
+                reservationDTO.getSeatId().toString(),
+                reservationDTO.getReserveDate() + "-" + reservationDTO.getStartTime());
+        String requestId = UUID.randomUUID().toString();
+        int expireTime = 30;
+
+        try {
+            if (!redisDistributedLockUtil.acquireLock(lockKey, requestId, expireTime)) {
+                throw new RuntimeException("系统繁忙，请稍后再试");
+            }
+
+            // 检查冲突预约
+            List<Reservation> conflictingReservations = reservationRepository.findConflictingReservations(
+                    reservationDTO.getSeatId(),
+                    reservationDTO.getReserveDate(),
+                    reservationDTO.getStartTime(),
+                    reservationDTO.getEndTime());
+
+            if (!conflictingReservations.isEmpty()) {
+                throw new RuntimeException("该时间段已被预约");
+            }
+
+            // 创建新预约
+            Reservation reservation = new Reservation();
+            reservation.setUserId(userId);
+            reservation.setSeatId(reservationDTO.getSeatId());
+            reservation.setClassroomId(reservationDTO.getClassroomId());
+            reservation.setReserveDate(reservationDTO.getReserveDate());
+            reservation.setStartTime(reservationDTO.getStartTime());
+            reservation.setDuration(reservationDTO.getDuration());
+            reservation.setEndTime(TimeUtils.calculateEndTime(reservationDTO.getStartTime(), reservationDTO.getDuration()));
+            reservation.setType("reservation");
+            reservation.setStatus("active");
+            reservation.setCreatedAt(LocalDateTime.now());
+
+            Reservation savedReservation = reservationRepository.save(reservation);
+            seatService.updateSeatStatus(reservationDTO.getSeatId(), "reserved");
+            redisCacheUtil.clearReservationCache(reservationDTO.getSeatId().longValue(),
+                    reservationDTO.getReserveDate().toString());
+
+            return savedReservation;
+        } catch (ObjectOptimisticLockingFailureException e) {
+            throw new RuntimeException("操作失败：该座位信息已被其他用户修改，请刷新页面后重试");
+        } finally {
+            redisDistributedLockUtil.releaseLock(lockKey, requestId);
+        }
     }
 
-    // 生成分布式锁键 - 高并发预约模块专用
-    String lockKey = redisDistributedLockUtil.generateLockKey(
-        "library:seat",
-        reservationDTO.getSeatId().toString(),
-        reservationDTO.getReserveDate() + "-" + reservationDTO.getStartTime());
-    String requestId = UUID.randomUUID().toString();
-    int expireTime = 30; // 锁过期时间30秒
+    @Override
+    @Transactional
+    public Reservation occupySeat(Integer reservationId, Integer userId) {
+        if (!redisRateLimiterUtil.checkReservationRateLimit(userId.toString())) {
+            throw new RuntimeException("请求过于频繁，请稍后再试");
+        }
 
-    try {
-      // 获取分布式锁 - 高并发预约模块专用
-      if (!redisDistributedLockUtil.acquireLock(lockKey, requestId, expireTime)) {
-        throw new RuntimeException("系统繁忙，请稍后再试");
-      }
+        checkUserActiveReservationLimit(userId);
 
-      // 检查是否存在冲突预约
-      List<Reservation> conflictingReservations = reservationRepository.findConflictingReservations(
-          reservationDTO.getSeatId(),
-          reservationDTO.getReserveDate(),
-          reservationDTO.getStartTime(),
-          reservationDTO.getEndTime());
+        Reservation reservation = reservationRepository.findById(reservationId)
+                .orElseThrow(() -> new RuntimeException("预约不存在"));
 
-      if (!conflictingReservations.isEmpty()) {
-        throw new RuntimeException("该时间段已被预约");
-      }
+        if (!reservation.getStatus().equals("active")) {
+            throw new RuntimeException("该预约已被处理");
+        }
 
-      // 创建新预约
-      Reservation reservation = new Reservation();
-      reservation.setUserId(userId);
-      reservation.setSeatId(reservationDTO.getSeatId());
-      reservation.setClassroomId(reservationDTO.getClassroomId());
-      reservation.setReserveDate(reservationDTO.getReserveDate());
-      reservation.setStartTime(reservationDTO.getStartTime());
-      reservation.setDuration(reservationDTO.getDuration());
-      reservation.setEndTime(TimeUtils.calculateEndTime(reservationDTO.getStartTime(), reservationDTO.getDuration()));
-      reservation.setType("reservation");
-      reservation.setStatus("active");
-      reservation.setCreatedAt(LocalDateTime.now());
+        if (reservation.getUserId().equals(userId)) {
+            throw new RuntimeException("不能占用自己的预约");
+        }
 
-      // 保存预约
-      Reservation savedReservation = reservationRepository.save(reservation);
+        if (!TimeUtils.isAfter30MinutesFromStart(reservation.getReserveDate(), reservation.getStartTime())) {
+            throw new RuntimeException("预约开始时间后30分钟才能占用");
+        }
 
-      // 更新座位状态为reserved
-      seatService.updateSeatStatus(reservationDTO.getSeatId(), "reserved");
+        String lockKey = redisDistributedLockUtil.generateLockKey(
+                "library:seat",
+                reservation.getSeatId().toString(),
+                reservation.getReserveDate() + "-" + reservation.getStartTime());
+        String requestId = UUID.randomUUID().toString();
+        int expireTime = 30;
 
-      // 清除缓存 - 高并发预约模块专用
-      redisCacheUtil.clearReservationCache(reservationDTO.getSeatId().longValue(),
-          reservationDTO.getReserveDate().toString());
+        try {
+            if (!redisDistributedLockUtil.acquireLock(lockKey, requestId, expireTime)) {
+                throw new RuntimeException("系统繁忙，请稍后再试");
+            }
 
-      return savedReservation;
-    } catch (ObjectOptimisticLockingFailureException e) {
-      throw new RuntimeException("操作失败：该座位信息已被其他用户修改，请刷新页面后重试");
-    } finally {
-      // 释放分布式锁 - 高并发预约模块专用
-      redisDistributedLockUtil.releaseLock(lockKey, requestId);
-    }
-  }
+            Integer seatId = reservation.getSeatId();
+            String seatStatus = seatService.getSeatStatus(seatId);
 
-  @Override
-  @Transactional
-  public Reservation occupySeat(Integer reservationId, Integer userId) {
-    // 检查限流 - 高并发预约模块专用
-    if (!redisRateLimiterUtil.checkReservationRateLimit(userId.toString())) {
-      throw new RuntimeException("请求过于频繁，请稍后再试");
-    }
+            log.info("占用前检查：预约ID={}, 预约状态={}, 座位ID={}, 座位状态={}",
+                    reservationId, reservation.getStatus(), seatId, seatStatus);
 
-    // 检查用户活跃预约数量是否超过限制
-    checkUserActiveReservationLimit(userId);
+            if (!seatStatus.equals("reserved")) {
+                throw new RuntimeException("座位状态不正确，当前状态为：" + seatStatus + "，仅 reserved 状态可被占用");
+            }
 
-    Reservation reservation = reservationRepository.findById(reservationId)
-        .orElseThrow(() -> new RuntimeException("预约不存在"));
+            Reservation occupation = new Reservation();
+            occupation.setUserId(userId);
+            occupation.setSeatId(reservation.getSeatId());
+            occupation.setClassroomId(reservation.getClassroomId());
+            occupation.setReserveDate(reservation.getReserveDate());
+            occupation.setStartTime(reservation.getStartTime());
+            occupation.setDuration(reservation.getDuration());
+            occupation.setEndTime(reservation.getEndTime());
+            occupation.setType("occupation");
+            occupation.setStatus("active");
+            occupation.setCreatedAt(LocalDateTime.now());
 
-    // 检查是否可以占用
-    if (!reservation.getStatus().equals("active")) {
-      throw new RuntimeException("该预约已被处理");
-    }
+            Reservation savedOccupation = reservationRepository.save(occupation);
 
-    // 检查操作者是否是原预约人
-    if (reservation.getUserId().equals(userId)) {
-      throw new RuntimeException("不能占用自己的预约");
+            reservation.setStatus("replaced");
+            reservation.setActualEndTime(LocalDateTime.now());
+            reservationRepository.save(reservation);
+
+            seatService.updateSeatStatus(reservation.getSeatId(), "occupied");
+            redisCacheUtil.clearReservationCache(reservation.getSeatId().longValue(),
+                    reservation.getReserveDate().toString());
+
+            return savedOccupation;
+        } catch (ObjectOptimisticLockingFailureException e) {
+            throw new RuntimeException("操作失败：该座位信息已被其他用户修改，请刷新页面后重试");
+        } finally {
+            redisDistributedLockUtil.releaseLock(lockKey, requestId);
+        }
     }
 
-    // 检查是否满足30分钟条件
-    if (!TimeUtils.isAfter30MinutesFromStart(reservation.getReserveDate(), reservation.getStartTime())) {
-      throw new RuntimeException("预约开始时间后30分钟才能占用");
+    @Override
+    @Transactional
+    public void leaveSeat(Integer reservationId, Integer userId) {
+        try {
+            Reservation reservation = reservationRepository.findById(reservationId)
+                    .orElseThrow(() -> new RuntimeException("预约不存在"));
+
+            if (!reservation.getUserId().equals(userId)) {
+                throw new RuntimeException("只能离开自己的预约");
+            }
+
+            if (!reservation.getStatus().equals("active")) {
+                throw new RuntimeException("该预约已结束或已取消");
+            }
+
+            reservation.setStatus("cancelled");
+            reservation.setActualEndTime(LocalDateTime.now());
+            long actualDuration = java.time.Duration.between(reservation.getCreatedAt(), LocalDateTime.now()).toMinutes();
+            reservation.setActualDurationMinutes((int) actualDuration);
+            reservationRepository.save(reservation);
+
+            seatService.updateSeatStatus(reservation.getSeatId(), "available");
+            redisCacheUtil.clearReservationCache(reservation.getSeatId().longValue(),
+                    reservation.getReserveDate().toString());
+        } catch (ObjectOptimisticLockingFailureException e) {
+            throw new RuntimeException("操作失败：该座位信息已被其他用户修改，请刷新页面后重试");
+        }
     }
 
-    // 生成分布式锁键 - 高并发预约模块专用
-    String lockKey = redisDistributedLockUtil.generateLockKey(
-        "library:seat",
-        reservation.getSeatId().toString(),
-        reservation.getReserveDate() + "-" + reservation.getStartTime());
-    String requestId = UUID.randomUUID().toString();
-    int expireTime = 30; // 锁过期时间30秒
-
-    try {
-      // 获取分布式锁 - 高并发预约模块专用
-      if (!redisDistributedLockUtil.acquireLock(lockKey, requestId, expireTime)) {
-        throw new RuntimeException("系统繁忙，请稍后再试");
-      }
-
-      // 检查座位状态
-      Integer seatId = reservation.getSeatId();
-      String seatStatus = seatService.getSeatStatus(seatId);
-
-      // 打印关键日志
-      log.info("占用前检查：预约ID={}, 预约状态={}, 座位ID={}, 座位状态={}",
-          reservationId, reservation.getStatus(), seatId, seatStatus);
-
-      if (!seatStatus.equals("reserved")) {
-        throw new RuntimeException("座位状态不正确，当前状态为：" + seatStatus + "，仅 reserved 状态可被占用");
-      }
-
-      // 创建新的占用记录
-      Reservation occupation = new Reservation();
-      occupation.setUserId(userId);
-      occupation.setSeatId(reservation.getSeatId());
-      occupation.setClassroomId(reservation.getClassroomId());
-      occupation.setReserveDate(reservation.getReserveDate());
-      occupation.setStartTime(reservation.getStartTime());
-      occupation.setDuration(reservation.getDuration());
-      occupation.setEndTime(reservation.getEndTime());
-      occupation.setType("occupation");
-      occupation.setStatus("active");
-      occupation.setCreatedAt(LocalDateTime.now());
-
-      // 保存占用记录
-      Reservation savedOccupation = reservationRepository.save(occupation);
-
-      // 更新原预约记录为replaced
-      reservation.setStatus("replaced");
-      reservation.setActualEndTime(LocalDateTime.now());
-      reservationRepository.save(reservation);
-
-      // 更新座位状态为occupied
-      seatService.updateSeatStatus(reservation.getSeatId(), "occupied");
-
-      // 清除缓存 - 高并发预约模块专用
-      redisCacheUtil.clearReservationCache(reservation.getSeatId().longValue(),
-          reservation.getReserveDate().toString());
-
-      return savedOccupation;
-    } catch (ObjectOptimisticLockingFailureException e) {
-      throw new RuntimeException("操作失败：该座位信息已被其他用户修改，请刷新页面后重试");
-    } finally {
-      // 释放分布式锁 - 高并发预约模块专用
-      redisDistributedLockUtil.releaseLock(lockKey, requestId);
-    }
-  }
-
-  @Override
-  @Transactional
-  public void leaveSeat(Integer reservationId, Integer userId) {
-    try {
-      Reservation reservation = reservationRepository.findById(reservationId)
-          .orElseThrow(() -> new RuntimeException("预约不存在"));
-
-      // 检查是否是本人操作
-      if (!reservation.getUserId().equals(userId)) {
-        throw new RuntimeException("只能离开自己的预约");
-      }
-
-      // 检查是否可以离开
-      if (!reservation.getStatus().equals("active")) {
-        throw new RuntimeException("该预约已结束或已取消");
-      }
-
-      // 更新预约状态
-      reservation.setStatus("cancelled");
-      reservation.setActualEndTime(LocalDateTime.now());
-      // 计算实际使用时长
-      long actualDuration = java.time.Duration.between(reservation.getCreatedAt(), LocalDateTime.now()).toMinutes();
-      reservation.setActualDurationMinutes((int) actualDuration);
-      reservationRepository.save(reservation);
-
-      // 恢复座位状态为available
-      seatService.updateSeatStatus(reservation.getSeatId(), "available");
-
-      // 清除缓存 - 高并发预约模块专用
-      redisCacheUtil.clearReservationCache(reservation.getSeatId().longValue(),
-          reservation.getReserveDate().toString());
-    } catch (ObjectOptimisticLockingFailureException e) {
-      throw new RuntimeException("操作失败：该座位信息已被其他用户修改，请刷新页面后重试");
-    }
-  }
-
-  @Override
-  public List<Reservation> getReservationsByUserId(Integer userId) {
-    return reservationRepository.findByUserId(userId);
-  }
-
-  @Override
-  public List<Reservation> getReservationBySeatId(Integer seatId) {
-    return reservationRepository.findBySeatIdAndStatus(seatId, "active");
-  }
-
-  @Override
-  @Scheduled(cron = "0 * * * * *") // 每分钟执行一次
-  @Transactional
-  public void processExpiredReservations() {
-    // 查询所有状态为 active 且结束时间 < 当前时间 的预约
-    List<Reservation> expiredReservations = reservationRepository.findExpiredReservations();
-    for (Reservation reservation : expiredReservations) {
-      reservation.setStatus("completed");
-      reservation.setActualEndTime(LocalDateTime.now());
-      reservationRepository.save(reservation);
-      // 恢复座位状态
-      seatService.updateSeatStatus(reservation.getSeatId(), "available");
+    @Override
+    public List<Reservation> getReservationsByUserId(Integer userId) {
+        return reservationRepository.findByUserId(userId);
     }
 
-    // 打印日志
-    if (!expiredReservations.isEmpty()) {
-      System.out.println("定时任务：自动释放了 " + expiredReservations.size() + " 条过期预约");
+    /**
+     * ✅ 批量查询优化版 - 获取座位的所有预约
+     */
+    @Override
+    public List<Reservation> getReservationBySeatId(Integer seatId, Integer currentUserId) {
+        // 1. 获取该座位所有活跃的预约
+        List<Reservation> reservations = reservationRepository.findBySeatIdAndStatus(seatId, "active");
+
+        if (reservations.isEmpty()) {
+            log.debug("座位 {} 没有活跃预约", seatId);
+            return reservations;
+        }
+
+        // 2. 批量获取所有预约的用户ID（去重）
+        List<Integer> userIds = reservations.stream()
+                .map(Reservation::getUserId)
+                .distinct()
+                .collect(Collectors.toList());
+
+        log.debug("座位 {} 有 {} 条预约，涉及 {} 个用户", seatId, reservations.size(), userIds.size());
+
+        // 3. 批量查询用户信息（一次查询获取所有用户）
+        Map<Integer, User> userMap = userRepository.findAllById(userIds)
+                .stream()
+                .collect(Collectors.toMap(User::getId, user -> user));
+
+        // 4. 填充预约数据
+        for (Reservation reservation : reservations) {
+            Integer userId = reservation.getUserId();
+            User user = userMap.get(userId);
+
+            // 设置用户名
+            if (user != null && user.getUsername() != null) {
+                reservation.setUserName(user.getUsername());
+            } else {
+                reservation.setUserName("用户" + userId);  // 兜底
+            }
+
+            // 设置是否是当前用户
+            reservation.setIsOwner(currentUserId != null && currentUserId.equals(userId));
+        }
+
+        log.info("获取座位 {} 的预约列表成功，共 {} 条", seatId, reservations.size());
+
+        return reservations;
     }
-  }
+
+    @Override
+    @Scheduled(cron = "0 * * * * *")
+    @Transactional
+    public void processExpiredReservations() {
+        List<Reservation> expiredReservations = reservationRepository.findExpiredReservations();
+        for (Reservation reservation : expiredReservations) {
+            reservation.setStatus("completed");
+            reservation.setActualEndTime(LocalDateTime.now());
+            reservationRepository.save(reservation);
+            seatService.updateSeatStatus(reservation.getSeatId(), "available");
+        }
+
+        if (!expiredReservations.isEmpty()) {
+            log.info("定时任务：自动释放了 {} 条过期预约", expiredReservations.size());
+        }
+    }
+
+    // ==================== 私有辅助方法 ====================
+
+    private void checkUserActiveReservationLimit(Integer userId) {
+        int activeCount = reservationRepository.countActiveReservationsByUserId(userId);
+        if (activeCount >= 3) {
+            throw new RuntimeException("您最多只能同时预约/占用3个座位，请完成现有预约后再操作");
+        }
+    }
 }

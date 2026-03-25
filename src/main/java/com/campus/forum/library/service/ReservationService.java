@@ -13,7 +13,7 @@ public interface ReservationService {
 
   List<Reservation> getReservationsByUserId(Integer userId);
 
-  List<Reservation> getReservationBySeatId(Integer seatId);
+  List<Reservation> getReservationBySeatId(Integer seatId, Integer currentUserId);
 
   void processExpiredReservations();
 }
