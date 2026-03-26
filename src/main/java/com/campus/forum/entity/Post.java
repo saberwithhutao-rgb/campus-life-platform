@@ -38,6 +38,12 @@ public class Post {
   @OneToMany(mappedBy = "post", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
   private List<PostImage> images;
 
+    @Transient
+    private String userName;
+
+    @Transient
+    private Boolean canDelete;
+
   @PrePersist
   public void prePersist() {
     if (auditStatus == null) {

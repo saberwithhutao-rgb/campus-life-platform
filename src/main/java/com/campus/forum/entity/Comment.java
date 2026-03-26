@@ -38,6 +38,12 @@ public class Comment {
   @org.hibernate.annotations.BatchSize(size = 10)
   private List<CommentImage> images = new java.util.ArrayList<>();
 
+    @Transient
+    private String userName;
+
+    @Transient
+    private Boolean canDelete;
+
   @PrePersist
   public void prePersist() {
     if (auditStatus == null) {

@@ -2,11 +2,14 @@ package com.campus.forum.controller;
 
 import com.campus.forum.common.Result;
 import com.campus.forum.dto.PostCreateDTO;
+import com.campus.forum.entity.Comment;
 import com.campus.forum.entity.Post;
 import com.campus.forum.repository.PostRepository;
 import com.campus.forum.service.CommentService;
 import com.campus.forum.service.PostService;
 import com.campus.forum.util.JwtUtil;
+import com.campus.forum.user.repository.UserRepository;
+import com.campus.forum.user.entity.User;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -15,6 +18,7 @@ import org.springframework.data.domain.Sort;
 import java.util.Map;
 import java.util.HashMap;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping({ "/api/posts" })
@@ -24,12 +28,14 @@ public class PostController {
   private final CommentService commentService;
   private final PostRepository postRepository;
   private final JwtUtil jwtUtil;
+    private final UserRepository userRepository;
 
-  public PostController(PostService postService, CommentService commentService, PostRepository postRepository, JwtUtil jwtUtil) {
+  public PostController(PostService postService, CommentService commentService, PostRepository postRepository, JwtUtil jwtUtil, UserRepository userRepository) {
     this.postService = postService;
     this.commentService = commentService;
     this.postRepository = postRepository;
     this.jwtUtil = jwtUtil;
+      this.userRepository = userRepository;
   }
 
   /**
@@ -84,7 +90,8 @@ public class PostController {
   @GetMapping
   public Result<?> getAllPosts(
       @RequestParam(defaultValue = "0") int page,
-      @RequestParam(defaultValue = "10") int size) {
+      @RequestParam(defaultValue = "10") int size,
+      @RequestHeader(value = "Authorization", required = false) String authorization) {
     try {
       // 参数校验
       if (page < 0) {
@@ -96,6 +103,9 @@ public class PostController {
 
       Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createTime"));
       Page<Post> posts = postService.getAllPosts(pageable);
+
+        Integer currentUserId = getUserIdFromToken(authorization);
+        fillPostUserInfo(posts.getContent(), currentUserId);
 
       // 构建前端需要的完整分页响应格式
       Map<String, Object> pageResponse = new HashMap<>();
@@ -156,13 +166,18 @@ public class PostController {
   public Result<Page<Post>> getPostsByCategory(
       @PathVariable Integer categoryId,
       @RequestParam(defaultValue = "0") int page,
-      @RequestParam(defaultValue = "10") int size) {
+      @RequestParam(defaultValue = "10") int size,
+      @RequestHeader(value = "Authorization", required = false) String authorization){
     try {
       if (categoryId == null) {
         return Result.fail(400, "分类ID不能为空");
       }
       Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createTime"));
       Page<Post> posts = postService.getPostsByCategory(categoryId, pageable);
+
+        Integer currentUserId = getUserIdFromToken(authorization);
+        fillPostUserInfo(posts.getContent(), currentUserId);
+
       return Result.success(posts);
     } catch (Exception e) {
       e.printStackTrace();
@@ -174,19 +189,71 @@ public class PostController {
    * 获取帖子详情（包含评论）
    */
   @GetMapping("/{id}")
-  public Result<Post> getPostById(@PathVariable Integer id) {
+  public Result<Post> getPostById(@PathVariable Integer id, @RequestHeader(value = "Authorization", required = false) String authorization) {
     try {
       if (id == null) {
         return Result.fail(400, "帖子ID不能为空");
       }
       // 使用PostService的getPostById方法获取帖子信息
       Post post = postService.getPostById(id);
+
+        Integer currentUserId = getUserIdFromToken(authorization);
+        fillPostUserInfo(List.of(post), currentUserId);
+
+        if (post.getComments() != null && !post.getComments().isEmpty()) {
+            fillCommentUserInfo(post.getComments(), currentUserId);
+        }
+
       return Result.success(post);
     } catch (Exception e) {
       e.printStackTrace();
       return Result.fail(500, "查询失败：" + e.getMessage());
     }
   }
+
+    private void fillPostUserInfo(List<Post> posts, Integer currentUserId) {
+        if (posts == null || posts.isEmpty()) return;
+
+        // 批量获取所有用户ID
+        List<Integer> userIds = posts.stream()
+                .map(Post::getUserId)
+                .distinct()
+                .collect(Collectors.toList());
+
+        // 批量查询用户
+        Map<Integer, String> userNames = userRepository.findAllById(userIds)
+                .stream()
+                .collect(Collectors.toMap(User::getId, User::getUsername));
+
+        for (Post post : posts) {
+            // 设置用户名
+            String userName = userNames.get(post.getUserId());
+            post.setUserName(userName != null ? userName : "用户" + post.getUserId());
+
+            // 设置是否可以删除
+            post.setCanDelete(currentUserId != null && currentUserId.equals(post.getUserId()));
+        }
+    }
+
+    // ✅ 添加评论填充方法
+    private void fillCommentUserInfo(List<Comment> comments, Integer currentUserId) {
+        if (comments == null || comments.isEmpty()) return;
+
+        List<Integer> userIds = comments.stream()
+                .map(Comment::getUserId)
+                .distinct()
+                .collect(Collectors.toList());
+
+        Map<Integer, String> userNames = userRepository.findAllById(userIds)
+                .stream()
+                .collect(Collectors.toMap(User::getId, User::getUsername));
+
+        for (Comment comment : comments) {
+            String userName = userNames.get(comment.getUserId());
+            comment.setUserName(userName != null ? userName : "用户" + comment.getUserId());
+            comment.setCanDelete(currentUserId != null && currentUserId.equals(comment.getUserId()));
+        }
+    }
 
   /**
    * 删除帖子（只能本人删除）
@@ -222,5 +289,9 @@ public class PostController {
 
     public PostRepository getPostRepository() {
         return postRepository;
+    }
+
+    public UserRepository getUserRepository() {
+        return userRepository;
     }
 }

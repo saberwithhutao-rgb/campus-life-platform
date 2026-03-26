@@ -40,7 +40,6 @@ public class JwtUtil {
 
             log.debug("Claims内容: {}", claims);
 
-            // ✅ 修改：优先从 sub 字段获取（JWT标准字段）
             Object userId = claims.get("sub");
 
             // 兼容其他可能的字段名

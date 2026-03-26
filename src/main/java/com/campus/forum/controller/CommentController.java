@@ -5,11 +5,15 @@ import com.campus.forum.dto.CommentCreateDTO;
 import com.campus.forum.entity.Comment;
 import com.campus.forum.service.CommentService;
 import com.campus.forum.util.JwtUtil;
+import com.campus.forum.user.repository.UserRepository;
+import com.campus.forum.user.entity.User;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Example;
 import org.springframework.web.bind.annotation.*;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping({ "/api/comments" })
@@ -17,12 +21,14 @@ public class CommentController {
 
   private final CommentService commentService;
   private final JwtUtil jwtUtil;
+    private final UserRepository userRepository;
 
     private static final Logger logger = LoggerFactory.getLogger(Example.class);
 
-  public CommentController(CommentService commentService, JwtUtil jwtUtil) {
+  public CommentController(CommentService commentService, JwtUtil jwtUtil, UserRepository userRepository) {
     this.commentService = commentService;
     this.jwtUtil = jwtUtil;
+      this.userRepository = userRepository;
   }
 
   /**
@@ -71,18 +77,45 @@ public class CommentController {
    * 根据帖子ID查询评论
    */
   @GetMapping
-  public Result<List<Comment>> getCommentsByPostId(@RequestParam Integer postId) {
+  public Result<List<Comment>> getCommentsByPostId(@RequestParam Integer postId,
+                                                   @RequestHeader(value = "Authorization", required = false) String authorization) {
     try {
       if (postId == null) {
         return Result.fail(400, "帖子ID不能为空");
       }
       List<Comment> comments = commentService.getCommentsByPostId(postId);
+
+        Integer currentUserId = getUserIdFromToken(authorization);
+
+        if (comments != null && !comments.isEmpty()) {
+            fillCommentUserInfo(comments, currentUserId);
+        }
+
       return Result.success(comments);
     } catch (Exception e) {
         logger.error("操作失败，原因: {}", e.getMessage(), e);
       return Result.fail(500, "查询失败：" + e.getMessage());
     }
   }
+
+    private void fillCommentUserInfo(List<Comment> comments, Integer currentUserId) {
+        if (comments == null || comments.isEmpty()) return;
+
+        List<Integer> userIds = comments.stream()
+                .map(Comment::getUserId)
+                .distinct()
+                .collect(Collectors.toList());
+
+        Map<Integer, String> userNames = userRepository.findAllById(userIds)
+                .stream()
+                .collect(Collectors.toMap(User::getId, User::getUsername));
+
+        for (Comment comment : comments) {
+            String userName = userNames.get(comment.getUserId());
+            comment.setUserName(userName != null ? userName : "用户" + comment.getUserId());
+            comment.setCanDelete(currentUserId != null && currentUserId.equals(comment.getUserId()));
+        }
+    }
 
   /**
    * 删除评论（只能本人删除）
@@ -111,4 +144,8 @@ public class CommentController {
   private Integer getUserIdFromToken(String authorization) {
     return jwtUtil.getUserIdFromToken(jwtUtil.extractToken(authorization));
   }
+
+    public UserRepository getUserRepository() {
+        return userRepository;
+    }
 }
