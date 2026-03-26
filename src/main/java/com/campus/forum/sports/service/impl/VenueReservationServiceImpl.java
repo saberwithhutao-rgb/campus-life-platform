@@ -62,7 +62,7 @@ public class VenueReservationServiceImpl implements VenueReservationService {
     // 单次预约中，用户选择 1 个场地，只要当前活跃记录数 < 3，就允许提交
     long activeCount = reservationRepository.countActiveReservationsByUserId(userId);
     if (activeCount >= 3) {
-      throw new IllegalArgumentException("您最多只能同时预约2个场地，请先完成或取消后再预约");
+      throw new IllegalArgumentException("您最多只能同时预约3个场地，请先完成或取消后再预约");
     }
       // 解析日期和时间
       LocalDate reserveDate;
@@ -152,7 +152,7 @@ public class VenueReservationServiceImpl implements VenueReservationService {
     // 单次预约中，用户选择 1 个场地，只要当前活跃记录数 < 3，就允许提交
     long activeCount = reservationRepository.countActiveReservationsByUserId(userId);
     if (activeCount >= 3) {
-      throw new IllegalArgumentException("您最多只能同时预约2个场地，请先完成或取消后再预约");
+      throw new IllegalArgumentException("您最多只能同时预约3个场地，请先完成或取消后再预约");
     }
 
     // 获取被占用的预约
