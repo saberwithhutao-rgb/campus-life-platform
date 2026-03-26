@@ -20,6 +20,7 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -63,11 +64,19 @@ public class VenueReservationServiceImpl implements VenueReservationService {
     if (activeCount >= 3) {
       throw new IllegalArgumentException("您最多只能同时预约2个场地，请先完成或取消后再预约");
     }
+      // 解析日期和时间
+      LocalDate reserveDate;
+      LocalTime startTime;
+      LocalTime endTime;
 
-    // 解析日期和时间
-    LocalDate reserveDate = LocalDate.parse(reservationDTO.getReserveDate());
-    LocalTime startTime = LocalTime.parse(reservationDTO.getStartTime());
-    LocalTime endTime = LocalTime.parse(reservationDTO.getEndTime());
+      try {
+          reserveDate = LocalDate.parse(reservationDTO.getReserveDate());
+          startTime = LocalTime.parse(reservationDTO.getStartTime());
+          endTime = LocalTime.parse(reservationDTO.getEndTime());
+      } catch (DateTimeParseException e) {
+          e.printStackTrace();
+          throw new IllegalArgumentException("时间格式不正确，结束时间不能超过23:59");
+      }
 
     // 检查时间是否合法
     LocalDateTime now = LocalDateTime.now();

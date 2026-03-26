@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.format.DateTimeParseException;
 import java.util.concurrent.CompletableFuture;
 
 @RestController
@@ -37,9 +38,12 @@ public class VenueReservationController {
       return CompletableFuture.completedFuture(Result.success(reservationService.createReservation(reservationDTO, userId)));
     } catch (IllegalArgumentException e) {
       return CompletableFuture.completedFuture(Result.fail(401, e.getMessage()));
-    } catch (Exception e) {
+    } catch (DateTimeParseException e) {
+        e.printStackTrace();
+        throw new IllegalArgumentException("结束时间不能超过23:59");  // ✅ 友好消息
+    }catch (Exception e) {
       e.printStackTrace();
-      return CompletableFuture.completedFuture(Result.fail(500, "创建预约失败：" + e.getMessage()));
+      return CompletableFuture.completedFuture(Result.fail(500, "创建预约失败："));
     }
   }
 
