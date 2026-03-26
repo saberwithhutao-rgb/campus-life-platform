@@ -34,8 +34,9 @@ spring:
   servlet:
     multipart:
       enabled: true
-      max-file-size: 5MB
-      max-request-size: 20MB
+      max-file-size: 50MB      # 单个文件最大大小
+      max-request-size: 50MB   # 整个请求最大大小
+      file-size-threshold: 2KB
 
 server:
   port: 8082
