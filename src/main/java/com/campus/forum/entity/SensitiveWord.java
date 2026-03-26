@@ -16,7 +16,7 @@ public class SensitiveWord {
   private String word;
 
   @Column(columnDefinition = "SMALLINT DEFAULT 1")
-  private Integer status;
+  private Short status;
 
   @Column(name = "created_at", columnDefinition = "TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
   private LocalDateTime createdAt;
