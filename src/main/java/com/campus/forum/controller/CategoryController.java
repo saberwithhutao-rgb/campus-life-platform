@@ -23,7 +23,13 @@ public class CategoryController {
      */
     @GetMapping
     public Result<List<Category>> getAllCategories() {
-        List<Category> categories = categoryService.getAllCategories();
-        return Result.success(categories);
+        try {
+            List<Category> categories = categoryService.getAllCategories();
+            System.out.println("查询到的分类数量: " + categories.size());  // 添加日志
+            return Result.success(categories);
+        } catch (Exception e) {
+            e.printStackTrace();  // 打印完整堆栈
+            return Result.fail(500, "获取分类失败: " + e.getMessage());
+        }
     }
 }

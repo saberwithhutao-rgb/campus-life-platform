@@ -17,6 +17,11 @@ public class CategoryServiceImpl implements CategoryService {
 
     @Override
     public List<Category> getAllCategories() {
-        return categoryRepository.findAll();
+        try {
+            return categoryRepository.findAll();
+        } catch (Exception e) {
+            e.printStackTrace();
+            throw new RuntimeException("查询分类失败: " + e.getMessage());
+        }
     }
 }

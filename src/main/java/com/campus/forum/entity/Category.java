@@ -1,11 +1,13 @@
 package com.campus.forum.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import lombok.Data;
 
 @Data
 @Entity
 @Table(name = "category")
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
 public class Category {
   @Id
   @GeneratedValue(strategy = GenerationType.IDENTITY)
