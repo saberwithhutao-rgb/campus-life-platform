@@ -65,3 +65,8 @@ logging:
     org.hibernate.SQL: DEBUG
     org.hibernate.type.descriptor.sql.BasicBinder: TRACE
     org.springframework.web: DEBUG
+
+file:
+  upload:
+    max-file-size: 52428800  # 50MB
+    max-request-size: 52428800  # 50MB

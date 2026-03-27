@@ -1,6 +1,7 @@
 package com.campus.forum.service.impl;
 
 import com.campus.forum.service.FileUploadService;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
@@ -16,9 +17,11 @@ import java.util.UUID;
 @Service
 public class FileUploadServiceImpl implements FileUploadService {
   private static final String UPLOAD_DIR = "./uploads/";
-  private static final long MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
-  private static final long MAX_REQUEST_SIZE = 20 * 1024 * 1024; // 20MB
+    @Value("${file.upload.max-file-size:52428800}")  // 默认 50MB
+    private long MAX_FILE_SIZE;
 
+    @Value("${file.upload.max-request-size:52428800}")  // 默认 50MB
+    private long MAX_REQUEST_SIZE;
   @Override
   public List<String> uploadImages(MultipartFile[] files) throws IOException {
     List<String> imageUrls = new ArrayList<>();
@@ -35,13 +38,13 @@ public class FileUploadServiceImpl implements FileUploadService {
       if (file != null) {
         totalSize += file.getSize();
         if (file.getSize() > MAX_FILE_SIZE) {
-          throw new IOException("File size exceeds 5MB limit");
+          throw new IOException("File size exceeds 50MB limit");
         }
       }
     }
 
     if (totalSize > MAX_REQUEST_SIZE) {
-      throw new IOException("Total request size exceeds 20MB limit");
+      throw new IOException("Total request size exceeds 50MB limit");
     }
 
     // 创建日期目录

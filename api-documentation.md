@@ -86,8 +86,8 @@
 - **请求参数**:
   - `images`: 多文件上传（MultipartFile[]）
 - **请求限制**:
-  - 单文件大小 ≤ 5MB
-  - 总请求大小 ≤ 20MB
+  - 单文件大小 ≤ 50MB
+  - 总请求大小 ≤ 50MB
 - **响应格式**:
   ```json
   {
@@ -103,7 +103,7 @@
   ```json
   {
     "code": 500,
-    "msg": "File size exceeds 5MB limit",
+    "msg": "File size exceeds 50MB limit",
     "data": null
   }
   ```
