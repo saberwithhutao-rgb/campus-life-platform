@@ -16,7 +16,7 @@ import java.util.UUID;
 
 @Service
 public class FileUploadServiceImpl implements FileUploadService {
-    @Value("${file.upload.path:/opt/smart-campus/uploads/}")
+    @Value("${file.upload.path:/opt/smart-campus/campus-life-platform/uploads/}")
     private String UPLOAD_DIR;
     @Value("${file.upload.max-file-size:52428800}")  // 默认 50MB
     private long MAX_FILE_SIZE;

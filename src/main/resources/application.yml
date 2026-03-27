@@ -70,3 +70,4 @@ file:
   upload:
     max-file-size: 52428800  # 50MB
     max-request-size: 52428800  # 50MB
+    path: /opt/smart-campus/campus-life-platform/uploads/
