@@ -221,21 +221,23 @@ public class PostController {
                 .collect(Collectors.toList());
 
         // 批量查询用户
-        Map<Integer, String> userNames = userRepository.findAllById(userIds)
+        Map<Integer, User> userMap = userRepository.findAllById(userIds)
                 .stream()
-                .collect(Collectors.toMap(User::getId, User::getUsername));
+                .collect(Collectors.toMap(User::getId, user -> user));
 
         for (Post post : posts) {
-            // 设置用户名
-            String userName = userNames.get(post.getUserId());
-            post.setUserName(userName != null ? userName : "用户" + post.getUserId());
-
-            // 设置是否可以删除
+            User user = userMap.get(post.getUserId());
+            if (user != null) {
+                post.setUserName(user.getUsername());
+                post.setUserAvatar(user.getAvatarUrl());
+            } else {
+                post.setUserName("未知用户");
+                post.setUserAvatar(null);
+            }
             post.setCanDelete(currentUserId != null && currentUserId.equals(post.getUserId()));
         }
     }
 
-    // ✅ 添加评论填充方法
     private void fillCommentUserInfo(List<Comment> comments, Integer currentUserId) {
         if (comments == null || comments.isEmpty()) return;
 
@@ -244,13 +246,19 @@ public class PostController {
                 .distinct()
                 .collect(Collectors.toList());
 
-        Map<Integer, String> userNames = userRepository.findAllById(userIds)
+        Map<Integer, User> userMap = userRepository.findAllById(userIds)
                 .stream()
-                .collect(Collectors.toMap(User::getId, User::getUsername));
+                .collect(Collectors.toMap(User::getId, user -> user));
 
         for (Comment comment : comments) {
-            String userName = userNames.get(comment.getUserId());
-            comment.setUserName(userName != null ? userName : "用户" + comment.getUserId());
+            User user = userMap.get(comment.getUserId());
+            if (user != null) {
+                comment.setUserName(user.getUsername());
+                comment.setUserAvatar(user.getAvatarUrl());
+            } else {
+                comment.setUserName("未知用户");
+                comment.setUserAvatar(null);
+            }
             comment.setCanDelete(currentUserId != null && currentUserId.equals(comment.getUserId()));
         }
     }

@@ -42,6 +42,9 @@ public class Comment {
     private String userName;
 
     @Transient
+    private String userAvatar;
+
+    @Transient
     private Boolean canDelete;
 
   @PrePersist
