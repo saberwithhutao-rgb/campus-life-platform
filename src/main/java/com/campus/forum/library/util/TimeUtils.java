@@ -25,7 +25,13 @@ public class TimeUtils {
      * @return 结束时间
      */
     public static LocalTime calculateEndTime(LocalTime startTime, int duration) {
-        return startTime.plusMinutes(duration);
+        LocalTime endTime = startTime.plusHours(duration);
+
+        if (endTime.isBefore(startTime)) {
+            throw new RuntimeException("预约时间不能超过 23:00");
+        }
+
+        return endTime;
     }
 
     /**

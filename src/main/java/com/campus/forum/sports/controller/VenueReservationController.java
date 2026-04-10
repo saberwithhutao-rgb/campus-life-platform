@@ -33,18 +33,19 @@ public class VenueReservationController {
   public CompletableFuture<Result<?>> createReservation(
       @RequestBody VenueReservationDTO reservationDTO,
       @RequestHeader(value = "Authorization") String authorization) {
-    try {
-      Integer userId = getUserIdFromToken(authorization);
-      return CompletableFuture.completedFuture(Result.success(reservationService.createReservation(reservationDTO, userId)));
-    } catch (IllegalArgumentException e) {
-      return CompletableFuture.completedFuture(Result.fail(401, e.getMessage()));
-    } catch (DateTimeParseException e) {
-        e.printStackTrace();
-        throw new IllegalArgumentException("结束时间不能超过23:59");  // ✅ 友好消息
-    }catch (Exception e) {
-      e.printStackTrace();
-      return CompletableFuture.completedFuture(Result.fail(500, "创建预约失败："));
-    }
+      try {
+          Integer userId = getUserIdFromToken(authorization);
+          if (userId == null) {
+              return CompletableFuture.completedFuture(Result.fail(401, "未授权或Token无效"));
+          }
+          return CompletableFuture.completedFuture(Result.success(reservationService.createReservation(reservationDTO, userId)));
+      } catch (IllegalArgumentException e) {
+          // 业务异常（包括时间校验失败）返回 400
+          return CompletableFuture.completedFuture(Result.fail(400, e.getMessage()));
+      } catch (Exception e) {
+          e.printStackTrace();
+          return CompletableFuture.completedFuture(Result.fail(500, "创建预约失败：" + e.getMessage()));
+      }
   }
 
   @Async("virtualThreadPool")

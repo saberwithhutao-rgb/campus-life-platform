@@ -19,7 +19,6 @@ import jakarta.annotation.Resource;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.Map;
@@ -56,10 +55,6 @@ public class VenueReservationServiceImpl implements VenueReservationService {
       throw new IllegalArgumentException("请求过于频繁，请稍后再试");
     }
 
-    // 检查用户活跃预约数量 - 统计当前用户所有 status = 'active' 的预约/占用记录总数（包括 reservation 和
-    // occupation 类型）
-    // 只有当活跃记录数量 >= 3 时，才阻止新的预约/占用操作
-    // 单次预约中，用户选择 1 个场地，只要当前活跃记录数 < 3，就允许提交
     long activeCount = reservationRepository.countActiveReservationsByUserId(userId);
     if (activeCount >= 3) {
       throw new IllegalArgumentException("您最多只能同时预约3个场地，请先完成或取消后再预约");
@@ -75,8 +70,31 @@ public class VenueReservationServiceImpl implements VenueReservationService {
           endTime = LocalTime.parse(reservationDTO.getEndTime());
       } catch (DateTimeParseException e) {
           e.printStackTrace();
-          throw new IllegalArgumentException("时间格式不正确，结束时间不能超过23:59");
+          throw new IllegalArgumentException("时间格式不正确");
       }
+
+      // ========== 新增：时间边界校验 ==========
+      LocalTime OPENING_TIME = LocalTime.of(7, 0);   // 07:00 开门
+      LocalTime CLOSING_TIME = LocalTime.of(23, 0);  // 23:00 关门
+
+      // 1. 开始时间必须在 07:00 - 22:00 之间（因为至少要预约1小时）
+      if (startTime.isBefore(OPENING_TIME)) {
+          throw new IllegalArgumentException("体育馆开放时间为 07:00 - 23:00");
+      }
+      if (startTime.isAfter(LocalTime.of(22, 0))) {
+          throw new IllegalArgumentException("最晚只能预约到 23:00，请选择更早的开始时间");
+      }
+
+      // 2. 结束时间不能超过 23:00
+      if (endTime.isAfter(CLOSING_TIME)) {
+          throw new IllegalArgumentException("预约时间不能超过 23:00");
+      }
+
+      // 3. 检查开始时间是否晚于结束时间（跨天检测）
+      if (endTime.isBefore(startTime)) {
+          throw new IllegalArgumentException("预约时间不能跨天，必须在 23:00 前结束");
+      }
+      // ====================================
 
     // 检查时间是否合法
     LocalDateTime now = LocalDateTime.now();

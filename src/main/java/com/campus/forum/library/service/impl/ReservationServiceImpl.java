@@ -20,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import jakarta.annotation.Resource;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -60,8 +61,26 @@ public class ReservationServiceImpl implements ReservationService {
         // 检查用户活跃预约数量
         checkUserActiveReservationLimit(userId);
 
-        // 检查预约时间是否合法
-        if (!TimeUtils.isReservationTimeValid(reservationDTO.getReserveDate(), reservationDTO.getStartTime())) {
+        // ========== 新增：时间边界校验 ==========
+        LocalTime startTime = reservationDTO.getStartTime();
+        LocalTime endTime = reservationDTO.getEndTime();
+        LocalTime CLOSING_TIME = LocalTime.of(23, 0);  // 23:00 关门
+
+        // 1. 开始时间必须在 07:00 - 22:00 之间（因为至少要预约1小时）
+        if (startTime.isBefore(LocalTime.of(7, 0))) {
+            throw new RuntimeException("图书馆开放时间为 07:00 - 23:00");
+        }
+        if (startTime.isAfter(LocalTime.of(22, 0))) {
+            throw new RuntimeException("最晚只能预约到 23:00，请选择更早的开始时间");
+        }
+
+        // 2. 结束时间不能超过 23:00
+        if (endTime.isAfter(CLOSING_TIME)) {
+            throw new RuntimeException("预约时间不能超过 23:00");
+        }
+
+        // 3. 检查预约时间是否合法（不能预约过去的时间）
+        if (!TimeUtils.isReservationTimeValid(reservationDTO.getReserveDate(), startTime)) {
             throw new RuntimeException("不能预约已过去的时间段");
         }
 
