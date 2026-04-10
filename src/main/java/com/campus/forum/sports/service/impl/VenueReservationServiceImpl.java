@@ -50,10 +50,11 @@ public class VenueReservationServiceImpl implements VenueReservationService {
   @Override
   @Transactional
   public VenueReservation createReservation(VenueReservationDTO reservationDTO, Integer userId) {
-    // 检查限流 - 高并发预约模块专用
-    if (!redisRateLimiterUtil.checkReservationRateLimit(userId.toString())) {
-      throw new IllegalArgumentException("请求过于频繁，请稍后再试");
-    }
+      String userIdStr = userId.toString();
+
+      if (!redisRateLimiterUtil.checkCreateLimit(userIdStr)) {
+          throw new IllegalArgumentException("操作过于频繁，请稍后再试");
+      }
 
     long activeCount = reservationRepository.countActiveReservationsByUserId(userId);
     if (activeCount >= 3) {
@@ -159,10 +160,11 @@ public class VenueReservationServiceImpl implements VenueReservationService {
   @Override
   @Transactional
   public VenueReservation occupyCourt(Integer reservationId, Integer userId) {
-    // 检查限流 - 高并发预约模块专用
-    if (!redisRateLimiterUtil.checkReservationRateLimit(userId.toString())) {
-      throw new IllegalArgumentException("请求过于频繁，请稍后再试");
-    }
+    String userIdStr = userId.toString();
+
+      if (!redisRateLimiterUtil.checkOccupyLimit(userIdStr)) {
+          throw new IllegalArgumentException("操作过于频繁，请稍后再试");
+      }
 
     // 检查用户活跃预约数量 - 统计当前用户所有 status = 'active' 的预约/占用记录总数（包括 reservation 和
     // occupation 类型）

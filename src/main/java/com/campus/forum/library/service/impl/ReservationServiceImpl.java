@@ -53,9 +53,10 @@ public class ReservationServiceImpl implements ReservationService {
     @Override
     @Transactional(isolation = Isolation.SERIALIZABLE)
     public Reservation createReservation(ReservationDTO reservationDTO, Integer userId) {
-        // 检查限流
-        if (!redisRateLimiterUtil.checkReservationRateLimit(userId.toString())) {
-            throw new RuntimeException("请求过于频繁，请稍后再试");
+        String userIdStr = userId.toString();
+
+        if (!redisRateLimiterUtil.checkCreateLimit(userIdStr)) {
+            throw new RuntimeException("操作过于频繁，请稍后再试");
         }
 
         // 检查用户活跃预约数量
@@ -136,8 +137,10 @@ public class ReservationServiceImpl implements ReservationService {
     @Override
     @Transactional
     public Reservation occupySeat(Integer reservationId, Integer userId) {
-        if (!redisRateLimiterUtil.checkReservationRateLimit(userId.toString())) {
-            throw new RuntimeException("请求过于频繁，请稍后再试");
+        String userIdStr = userId.toString();
+
+        if (!redisRateLimiterUtil.checkOccupyLimit(userIdStr)) {
+            throw new RuntimeException("操作过于频繁，请稍后再试");
         }
 
         checkUserActiveReservationLimit(userId);
